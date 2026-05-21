@@ -30,8 +30,8 @@ def author_display(message: Message) -> str:
         full_name = " ".join(part for part in [contact.first_name, contact.last_name] if part)
         return f"MAX: {full_name}" if full_name else f"MAX user {contact.max_user_id}"
     if message.sender_kind == Message.SenderKind.MANAGER and message.manager:
-        return f"Manager: {manager_display(message.manager)}"
-    return "System"
+        return f"Менеджер: {manager_display(message.manager)}"
+    return "Система"
 
 
 def message_to_dict(message: Message) -> dict:
@@ -69,4 +69,3 @@ def conversation_to_dict(conversation: Conversation) -> dict:
         "last_message_at": conversation.last_message_at.isoformat() if conversation.last_message_at else None,
         "unread_count": conversation.unread_count,
     }
-

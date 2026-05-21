@@ -103,9 +103,10 @@ def conversation_messages_api(request: HttpRequest, conversation_id: int) -> Jso
             )
         conversation.last_message = message
         conversation.last_message_at = message.created_at
+        conversation.unread_count = 0
         if conversation.status == Conversation.Status.NEW:
             conversation.status = Conversation.Status.OPEN
-        conversation.save(update_fields=["last_message", "last_message_at", "status", "updated_at"])
+        conversation.save(update_fields=["last_message", "last_message_at", "unread_count", "status", "updated_at"])
         log_manager_action(
             manager=request.user,
             action="message.send",
@@ -122,7 +123,10 @@ def conversation_messages_api(request: HttpRequest, conversation_id: int) -> Jso
             request.user.id,
         )
 
-    return JsonResponse({"message": message_to_dict(message)}, status=201)
+    return JsonResponse(
+        {"message": message_to_dict(message), "conversation": conversation_to_dict(conversation)},
+        status=201,
+    )
 
 
 @require_POST

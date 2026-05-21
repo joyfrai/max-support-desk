@@ -12,3 +12,12 @@ def test_channel_layer_uses_redis_when_redis_url_is_set() -> None:
     layer = project_settings.channel_layers_from_env(redis_url="redis://redis:6379/0")["default"]
     assert layer["BACKEND"] == "channels_redis.core.RedisChannelLayer"
     assert layer["CONFIG"] == {"hosts": ["redis://redis:6379/0"]}
+
+
+def test_unfold_preview_uses_light_theme_and_hides_site_link() -> None:
+    assert project_settings.UNFOLD["THEME"] == "light"
+    assert project_settings.UNFOLD["SITE_URL"] is None
+
+
+def test_cross_origin_opener_policy_is_configurable() -> None:
+    assert hasattr(project_settings, "SECURE_CROSS_ORIGIN_OPENER_POLICY")

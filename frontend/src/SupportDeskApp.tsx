@@ -22,6 +22,48 @@ function contactTitle(conversation: Conversation): string {
   return fullName || `MAX user ${contact.max_user_id}`;
 }
 
+function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    new: "Новый",
+    open: "Открыт",
+    pending: "Ожидает",
+    closed: "Закрыт"
+  };
+  return labels[status] || status;
+}
+
+function sendStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    not_applicable: "",
+    queued: "В очереди",
+    sending: "Отправляется",
+    sent: "Отправлено",
+    failed: "Ошибка отправки"
+  };
+  return labels[status] ?? status;
+}
+
+function unreadLabel(count: number): string {
+  if (count <= 0) return "нет непрочитанных";
+  if (count === 1) return "1 непрочитанное";
+  return `${count} непрочитанных`;
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  })
+    .format(date)
+    .replace(",", "");
+}
+
 export function SupportDeskApp() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -54,8 +96,11 @@ export function SupportDeskApp() {
 
   async function handleSend(_: string, text: string) {
     if (!activeId || !text.trim()) return;
-    const created = await sendMessage(activeId, text.trim());
-    setMessages((items) => [...items, created]);
+    const result = await sendMessage(activeId, text.trim());
+    setMessages((items) => [...items, result.message]);
+    setConversations((items) =>
+      items.map((item) => (item.id === result.conversation.id ? result.conversation : item))
+    );
   }
 
   async function handleRetry(messageId: number) {
@@ -73,7 +118,9 @@ export function SupportDeskApp() {
               <ChatConversation
                 key={conversation.id}
                 name={contactTitle(conversation)}
-                info={`${conversation.status} · unread ${conversation.unread_count}`}
+                info={`${statusLabel(conversation.status)} · ${unreadLabel(conversation.unread_count)}`}
+                unreadCnt={conversation.unread_count || undefined}
+                unreadDot={conversation.unread_count > 0}
                 active={conversation.id === activeId}
                 onClick={() => setActiveId(conversation.id)}
               />
@@ -83,8 +130,8 @@ export function SupportDeskApp() {
         <ChatContainer>
           <ConversationHeader>
             <ConversationHeader.Content
-              userName={activeConversation ? contactTitle(activeConversation) : "Chats"}
-              info={activeConversation?.status || "Select conversation"}
+              userName={activeConversation ? contactTitle(activeConversation) : "Чаты"}
+              info={activeConversation ? statusLabel(activeConversation.status) : "Выберите чат"}
             />
           </ConversationHeader>
           <MessageList>
@@ -93,15 +140,17 @@ export function SupportDeskApp() {
                 key={message.id}
                 model={{
                   message: message.text || " ",
-                  sentTime: message.created_at || "",
+                  sentTime: formatDateTime(message.created_at),
                   sender: message.author_display,
                   direction: message.direction === "outgoing" ? "outgoing" : "incoming",
                   position: "single"
                 }}
               >
                 <ChatMessage.Footer
-                  sender={`${message.author_display} · ${message.send_status}`}
-                  sentTime={message.created_at || ""}
+                  sender={[message.author_display, sendStatusLabel(message.send_status)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  sentTime={formatDateTime(message.created_at)}
                 />
                 {message.send_status === "failed" ? (
                   <button
@@ -109,13 +158,13 @@ export function SupportDeskApp() {
                     type="button"
                     onClick={() => void handleRetry(message.id)}
                   >
-                    Retry
+                    Повторить
                   </button>
                 ) : null}
               </ChatMessage>
             ))}
           </MessageList>
-          <MessageInput placeholder="Type message" attachButton={false} onSend={handleSend} />
+          <MessageInput placeholder="Введите сообщение" attachButton={false} onSend={handleSend} />
         </ChatContainer>
       </MainContainer>
     </div>

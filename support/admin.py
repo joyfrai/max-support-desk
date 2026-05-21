@@ -25,6 +25,7 @@ def export_max_contacts_csv(
 ) -> HttpResponse:
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="max-users.csv"'
+    response.write("\ufeff")
     writer = csv.writer(response)
     writer.writerow(
         [

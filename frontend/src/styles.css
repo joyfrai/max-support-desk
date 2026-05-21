@@ -26,3 +26,10 @@
   margin-top: 4px;
   padding: 2px 8px;
 }
+
+.support-desk-shell .cs-message.cs-message--outgoing .cs-message__footer .cs-message__sender-name,
+.support-desk-shell .cs-message.cs-message--outgoing .cs-message__footer .cs-message__sent-time,
+.support-desk-shell .cs-message.cs-message--incoming .cs-message__footer .cs-message__sender-name,
+.support-desk-shell .cs-message.cs-message--incoming .cs-message__footer .cs-message__sent-time {
+  display: block;
+}

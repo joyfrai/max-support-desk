@@ -1,4 +1,4 @@
-import type { Conversation, Message } from "./types";
+import type { Conversation, Message, SendMessageResult } from "./types";
 
 function csrfToken(): string {
   const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
@@ -16,7 +16,7 @@ async function requestJson<T>(url: string, options: RequestInit = {}): Promise<T
     ...options
   });
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw new Error(`Ошибка запроса: ${response.status}`);
   }
   return (await response.json()) as T;
 }
@@ -33,15 +33,14 @@ export async function loadMessages(conversationId: number): Promise<Message[]> {
   return payload.messages;
 }
 
-export async function sendMessage(conversationId: number, text: string): Promise<Message> {
-  const payload = await requestJson<{ message: Message }>(
+export async function sendMessage(conversationId: number, text: string): Promise<SendMessageResult> {
+  return requestJson<SendMessageResult>(
     `/api/conversations/${conversationId}/messages/`,
     {
       method: "POST",
       body: JSON.stringify({ text })
     }
   );
-  return payload.message;
 }
 
 export async function retryMessage(messageId: number): Promise<Message> {
@@ -50,4 +49,3 @@ export async function retryMessage(messageId: number): Promise<Message> {
   });
   return payload.message;
 }
-

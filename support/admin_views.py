@@ -14,7 +14,7 @@ from support.services.audit import log_manager_action
 def chats_admin_view(request: HttpRequest) -> HttpResponse:
     context = {
         **admin.site.each_context(request),
-        "title": "Chats",
+        "title": "Чаты",
     }
     return TemplateResponse(request, "admin/support/chats.html", context)
 
@@ -22,6 +22,7 @@ def chats_admin_view(request: HttpRequest) -> HttpResponse:
 def export_max_users_csv_view(request: HttpRequest) -> HttpResponse:
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="max-users.csv"'
+    response.write("\ufeff")
     writer = csv.writer(response)
     writer.writerow(
         [

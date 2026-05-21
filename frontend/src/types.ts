@@ -26,3 +26,7 @@ export type Message = {
   created_at: string | null;
 };
 
+export type SendMessageResult = {
+  message: Message;
+  conversation: Conversation;
+};

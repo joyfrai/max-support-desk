@@ -116,10 +116,12 @@ def test_staff_can_create_queued_outgoing_message_and_audit_log(
     )
 
     assert response.status_code == 201
+    payload = as_json(response)
     message = Message.objects.get(direction=Message.Direction.OUTGOING)
     assert message.text == "Hello from support"
     assert message.manager == staff_user
     assert message.send_status == Message.SendStatus.QUEUED
+    assert payload["message"]["author_display"] == "Менеджер: Staff Manager"
     assert conversation.messages.filter(id=message.id).exists()
     assert ManagerActionLog.objects.filter(
         manager=staff_user,
@@ -127,6 +129,33 @@ def test_staff_can_create_queued_outgoing_message_and_audit_log(
         message=message,
         action="message.send",
     ).exists()
+
+
+@pytest.mark.django_db
+def test_manager_reply_marks_conversation_answered_without_marking_on_view(
+    client,
+    staff_user,
+    conversation,
+) -> None:
+    conversation.unread_count = 3
+    conversation.save(update_fields=["unread_count"])
+    client.force_login(staff_user)
+
+    view_response = client.get(reverse("api_conversation_messages", args=[conversation.id]))
+    assert view_response.status_code == 200
+    conversation.refresh_from_db()
+    assert conversation.unread_count == 3
+
+    reply_response = client.post(
+        reverse("api_conversation_messages", args=[conversation.id]),
+        data={"text": "Отвечено"},
+        content_type="application/json",
+    )
+
+    assert reply_response.status_code == 201
+    conversation.refresh_from_db()
+    assert conversation.unread_count == 0
+    assert as_json(reply_response)["conversation"]["unread_count"] == 0
 
 
 @pytest.mark.django_db

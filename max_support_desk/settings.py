@@ -27,6 +27,7 @@ def env_list(name: str, default: list[str] | None = None) -> list[str]:
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", ["127.0.0.1", "localhost"])
+SECURE_CROSS_ORIGIN_OPENER_POLICY = os.getenv("DJANGO_CROSS_ORIGIN_OPENER_POLICY", "same-origin") or None
 
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
 MAX_WEBHOOK_SECRET = os.getenv("MAX_WEBHOOK_SECRET", "")
@@ -183,21 +184,23 @@ CHANNEL_LAYERS = channel_layers_from_env()
 UNFOLD = {
     "SITE_TITLE": "MAX Support Desk",
     "SITE_HEADER": "MAX Support Desk",
+    "SITE_URL": None,
+    "THEME": "light",
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": True,
         "navigation": [
             {
-                "title": "Support",
+                "title": "Поддержка",
                 "separator": True,
                 "items": [
                     {
-                        "title": "MAX users",
+                        "title": "Пользователи MAX",
                         "icon": "group",
                         "link": reverse_lazy("admin:support_maxcontact_changelist"),
                     },
                     {
-                        "title": "Chats",
+                        "title": "Чаты",
                         "icon": "forum",
                         "link": reverse_lazy("admin_support_chats"),
                     },

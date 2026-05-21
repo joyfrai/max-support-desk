@@ -27,6 +27,8 @@ def env_list(name: str, default: list[str] | None = None) -> list[str]:
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", ["127.0.0.1", "localhost"])
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", [])
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_CROSS_ORIGIN_OPENER_POLICY = os.getenv("DJANGO_CROSS_ORIGIN_OPENER_POLICY", "same-origin") or None
 
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")

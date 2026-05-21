@@ -4,7 +4,7 @@ services:
       DATABASE_URL: sqlite:////app/data/db.sqlite3
       DJANGO_SECRET_KEY: local-preview-only
       DJANGO_DEBUG: "true"
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost,150.241.89.94}
       DJANGO_CROSS_ORIGIN_OPENER_POLICY: ""
       MAX_BOT_TOKEN: local-preview
       MAX_WEBHOOK_SECRET: local-preview

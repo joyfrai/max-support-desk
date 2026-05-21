@@ -15,11 +15,16 @@ import { loadConversations, loadMessages, retryMessage, sendMessage } from "./ap
 import type { Conversation, Message } from "./types";
 import "./styles.css";
 
-function contactTitle(conversation: Conversation): string {
+function contactDisplayName(conversation: Conversation): string {
   const contact = conversation.contact;
+  const fullName = [contact.last_name, contact.first_name].filter(Boolean).join(" ");
+  if (fullName) return fullName;
   if (contact.username) return `@${contact.username}`;
-  const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(" ");
   return fullName || `MAX user ${contact.max_user_id}`;
+}
+
+function contactNickname(conversation: Conversation): string {
+  return conversation.contact.username ? `@${conversation.contact.username}` : "";
 }
 
 function statusLabel(status: string): string {
@@ -117,7 +122,7 @@ export function SupportDeskApp() {
             {conversations.map((conversation) => (
               <ChatConversation
                 key={conversation.id}
-                name={contactTitle(conversation)}
+                name={contactDisplayName(conversation)}
                 info={`${statusLabel(conversation.status)} · ${unreadLabel(conversation.unread_count)}`}
                 unreadCnt={conversation.unread_count || undefined}
                 unreadDot={conversation.unread_count > 0}
@@ -130,8 +135,14 @@ export function SupportDeskApp() {
         <ChatContainer>
           <ConversationHeader>
             <ConversationHeader.Content
-              userName={activeConversation ? contactTitle(activeConversation) : "Чаты"}
-              info={activeConversation ? statusLabel(activeConversation.status) : "Выберите чат"}
+              userName={activeConversation ? contactDisplayName(activeConversation) : "Чаты"}
+              info={
+                activeConversation
+                  ? [statusLabel(activeConversation.status), contactNickname(activeConversation)]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "Выберите чат"
+              }
             />
           </ConversationHeader>
           <MessageList>

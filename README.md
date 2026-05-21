@@ -1,0 +1,156 @@
+# MAX Support Desk
+
+MVP support desk для сообщений из MAX: Django admin, staff-only Chatscope UI, webhook для входящих сообщений и worker для исходящей очереди.
+
+## Что нужно до установки
+
+- Домен для support desk, например `support.example.com`.
+- HTTPS-сертификат для домена. Практичный вариант: Let's Encrypt через `certbot`.
+- Сервер с Docker и Docker Compose plugin.
+- MySQL 8 или совместимая БД. Для локальной проверки можно использовать SQLite, но production лучше запускать на MySQL.
+- Токен MAX bot.
+- Секрет webhook для MAX. Он должен совпадать с `MAX_WEBHOOK_SECRET` в `.env`.
+
+## Быстрый порядок запуска на сервере
+
+1. Клонировать репозиторий:
+
+```bash
+git clone https://github.com/joyfrai/max-support-desk.git /opt/max-support-desk
+cd /opt/max-support-desk
+```
+
+2. Создать `.env`:
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Минимально заполнить:
+
+```bash
+DJANGO_SECRET_KEY=replace-with-long-random-secret
+DJANGO_DEBUG=false
+DJANGO_ALLOWED_HOSTS=support.example.com
+DJANGO_CSRF_TRUSTED_ORIGINS=https://support.example.com
+
+MYSQL_HOST=your-mysql-host
+MYSQL_PORT=3306
+MYSQL_DATABASE=max_support_desk
+MYSQL_USER=max_support_desk
+MYSQL_PASSWORD=replace-with-db-password
+
+MAX_BOT_TOKEN=replace-with-max-bot-token
+MAX_WEBHOOK_SECRET=replace-with-webhook-secret
+AUDIT_LOG_RETENTION_DAYS=7
+SUPPORT_LOG_LEVEL=INFO
+```
+
+Можно вместо `MYSQL_*` использовать одну строку:
+
+```bash
+DATABASE_URL=mysql://max_support_desk:password@mysql-host:3306/max_support_desk?charset=utf8mb4
+```
+
+3. Собрать и запустить контейнеры:
+
+```bash
+docker compose build
+docker compose up -d redis web worker
+```
+
+Redis поднимается только во внутренней Docker-сети и наружу не публикуется. Он нужен Django Channels для WebSocket-событий между web и worker.
+
+4. Применить миграции:
+
+```bash
+docker compose exec web python manage.py migrate
+```
+
+5. Создать суперпользователя Django:
+
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
+6. Открыть admin:
+
+```text
+https://support.example.com/admin/
+```
+
+Менеджеры должны быть Django users с `is_staff=True`. Раздел чатов доступен внутри admin sidebar: `Поддержка -> Чаты`.
+
+## Webhook MAX
+
+В приложении уже есть отдельный route для webhook:
+
+```text
+POST /webhooks/max/
+```
+
+Публичный URL для настройки в MAX:
+
+```text
+https://support.example.com/webhooks/max/
+```
+
+Секрет webhook передается в HTTP header:
+
+```text
+X-Max-Bot-Api-Secret: <MAX_WEBHOOK_SECRET>
+```
+
+Значение должно совпадать с `MAX_WEBHOOK_SECRET` в `.env`. Если секрет не совпадает, приложение вернет `403`.
+
+## Nginx
+
+Готовый пример лежит в [deploy/nginx/max-support-desk.conf](deploy/nginx/max-support-desk.conf).
+
+Установить конфиг:
+
+```bash
+sudo cp deploy/nginx/max-support-desk.conf /etc/nginx/sites-available/max-support-desk.conf
+sudo ln -s /etc/nginx/sites-available/max-support-desk.conf /etc/nginx/sites-enabled/max-support-desk.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Перед применением заменить `support.example.com` на реальный домен и проверить пути к сертификату:
+
+```text
+/etc/letsencrypt/live/<domain>/fullchain.pem
+/etc/letsencrypt/live/<domain>/privkey.pem
+```
+
+Nginx проксирует admin, static, Chatscope UI, webhook MAX и WebSocket route `/ws/` на Docker web port `127.0.0.1:8066`.
+
+## Локальная preview-сборка на SQLite
+
+Для быстрой проверки без внешней БД:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.sqlite-preview.yml up -d redis web
+```
+
+Preview запускает SQLite volume и demo data. Web будет доступен на:
+
+```text
+http://127.0.0.1:8066/admin/
+```
+
+## Проверка после обновлений
+
+```bash
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py check
+docker compose logs -f web worker
+```
+
+Для ручной проверки:
+
+- `/admin/` открывает Django admin.
+- `/admin/support/maxcontact/` показывает пользователей MAX только для просмотра.
+- `/admin/support/chats/` открывает Chatscope UI внутри Django admin.
+- `POST /webhooks/max/` принимает webhook только с правильным `X-Max-Bot-Api-Secret`.

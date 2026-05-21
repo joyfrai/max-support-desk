@@ -63,6 +63,15 @@ class MaxContactAdmin(ModelAdmin):
     readonly_fields = ("raw_user", "first_seen_at", "last_seen_at", "created_at", "updated_at")
     actions = [export_max_contacts_csv]
 
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(self, request: HttpRequest, obj: MaxContact | None = None) -> bool:
+        return False
+
+    def has_delete_permission(self, request: HttpRequest, obj: MaxContact | None = None) -> bool:
+        return False
+
 
 @admin.register(Conversation)
 class ConversationAdmin(ModelAdmin):

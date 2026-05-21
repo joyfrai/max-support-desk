@@ -883,3 +883,25 @@ Agent profiles установлены в:
 - `docs/competitor_research.md`
 
 В это ТЗ конкурентный анализ не добавлять, чтобы не мешать продуктовые решения и рыночные заметки.
+
+## 22. Источники
+
+MAX:
+
+- https://dev.max.ru/docs-api
+- https://dev.max.ru/docs-api/objects/User
+- https://dev.max.ru/docs-api/objects/Message
+- https://dev.max.ru/docs-api/objects/Update
+- https://dev.max.ru/docs-api/methods/POST/subscriptions
+- https://dev.max.ru/docs-api/methods/POST/messages
+- https://dev.max.ru/docs-api/methods/POST/uploads
+
+Chatscope:
+
+- https://chatscope.io/docs/
+- https://github.com/chatscope/chat-ui-kit-react
+
+Local references:
+
+- `/root/projects/repost_bot-main`
+- `/root/projects/telegram-mtproto-web-gateway`

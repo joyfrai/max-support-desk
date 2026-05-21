@@ -1,4 +1,4 @@
-import type { Conversation, Message, SendMessageResult } from "./types";
+import type { Conversation, ConversationPage, Message, SendMessageResult } from "./types";
 
 function csrfToken(): string {
   const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
@@ -21,9 +21,16 @@ async function requestJson<T>(url: string, options: RequestInit = {}): Promise<T
   return (await response.json()) as T;
 }
 
-export async function loadConversations(): Promise<Conversation[]> {
-  const payload = await requestJson<{ conversations: Conversation[] }>("/api/conversations/");
-  return payload.conversations;
+export async function loadConversations(params: {
+  offset?: number;
+  limit?: number;
+  search?: string;
+} = {}): Promise<ConversationPage> {
+  const query = new URLSearchParams();
+  query.set("offset", String(params.offset ?? 0));
+  query.set("limit", String(params.limit ?? 100));
+  if (params.search?.trim()) query.set("search", params.search.trim());
+  return requestJson<ConversationPage>(`/api/conversations/?${query.toString()}`);
 }
 
 export async function loadMessages(conversationId: number): Promise<Message[]> {

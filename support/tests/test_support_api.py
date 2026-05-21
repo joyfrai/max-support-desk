@@ -69,6 +69,51 @@ def test_conversations_api_lists_all_chats_for_staff(client, staff_user, convers
     payload = as_json(response)
     assert payload["conversations"][0]["id"] == conversation.id
     assert payload["conversations"][0]["contact"]["username"] == "client"
+    assert payload["limit"] == 100
+    assert payload["offset"] == 0
+    assert payload["has_more"] is False
+
+
+@pytest.mark.django_db
+def test_conversations_api_paginates_by_limit_and_offset(client, staff_user) -> None:
+    contacts = [
+        MaxContact.objects.create(max_user_id=f"user-{index}", first_name="Тест", last_name=str(index))
+        for index in range(3)
+    ]
+    now = timezone.now()
+    for index, contact_item in enumerate(contacts):
+        Conversation.objects.create(
+            contact=contact_item,
+            status=Conversation.Status.OPEN,
+            last_message_at=now - timedelta(minutes=index),
+        )
+    client.force_login(staff_user)
+
+    first = client.get(reverse("api_conversations"), {"limit": "2", "offset": "0"})
+    second = client.get(reverse("api_conversations"), {"limit": "2", "offset": "2"})
+
+    first_payload = as_json(first)
+    second_payload = as_json(second)
+    assert [item["contact"]["max_user_id"] for item in first_payload["conversations"]] == ["user-0", "user-1"]
+    assert first_payload["has_more"] is True
+    assert first_payload["next_offset"] == 2
+    assert [item["contact"]["max_user_id"] for item in second_payload["conversations"]] == ["user-2"]
+    assert second_payload["has_more"] is False
+
+
+@pytest.mark.django_db
+def test_conversations_api_searches_contacts(client, staff_user) -> None:
+    target = MaxContact.objects.create(max_user_id="1001", username="ivan_support", first_name="Иван", last_name="Петров")
+    other = MaxContact.objects.create(max_user_id="1002", username="maria_max", first_name="Мария", last_name="Смирнова")
+    Conversation.objects.create(contact=target, status=Conversation.Status.OPEN)
+    Conversation.objects.create(contact=other, status=Conversation.Status.OPEN)
+    client.force_login(staff_user)
+
+    response = client.get(reverse("api_conversations"), {"search": "Петров Иван"})
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert [item["contact"]["max_user_id"] for item in payload["conversations"]] == ["1001"]
 
 
 @pytest.mark.django_db
@@ -97,7 +142,7 @@ def test_messages_api_orders_by_display_order(client, staff_user, conversation, 
     assert response.status_code == 200
     payload = as_json(response)
     assert [item["id"] for item in payload["messages"]] == [earlier.id, later.id]
-    assert payload["messages"][0]["author_display"] == "MAX: @client"
+    assert payload["messages"][0]["author_display"] == "@client"
 
 
 @pytest.mark.django_db
@@ -121,7 +166,7 @@ def test_staff_can_create_queued_outgoing_message_and_audit_log(
     assert message.text == "Hello from support"
     assert message.manager == staff_user
     assert message.send_status == Message.SendStatus.QUEUED
-    assert payload["message"]["author_display"] == "Менеджер: Staff Manager"
+    assert payload["message"]["author_display"] == "Staff Manager"
     assert conversation.messages.filter(id=message.id).exists()
     assert ManagerActionLog.objects.filter(
         manager=staff_user,

@@ -30,3 +30,11 @@ export type SendMessageResult = {
   message: Message;
   conversation: Conversation;
 };
+
+export type ConversationPage = {
+  conversations: Conversation[];
+  offset: number;
+  limit: number;
+  next_offset: number;
+  has_more: boolean;
+};

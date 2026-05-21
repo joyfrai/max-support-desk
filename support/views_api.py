@@ -6,6 +6,7 @@ import hashlib
 from functools import wraps
 
 from django.db import transaction
+from django.db.models import Q
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -47,12 +48,30 @@ def parse_json_body(request: HttpRequest) -> dict:
 @require_GET
 @staff_required_json
 def conversations_api(request: HttpRequest) -> JsonResponse:
+    limit = _positive_int(request.GET.get("limit"), default=100, maximum=100)
+    offset = _positive_int(request.GET.get("offset"), default=0, maximum=100_000)
+    search = (request.GET.get("search") or "").strip()
+
     conversations = (
         Conversation.objects.select_related("contact", "assigned_to", "last_message")
         .all()
         .order_by("-last_message_at", "-updated_at", "id")
     )
-    return JsonResponse({"conversations": [conversation_to_dict(item) for item in conversations]})
+    if search:
+        conversations = _filter_conversations(conversations, search)
+
+    page = list(conversations[offset : offset + limit + 1])
+    items = page[:limit]
+    has_more = len(page) > limit
+    return JsonResponse(
+        {
+            "conversations": [conversation_to_dict(item) for item in items],
+            "offset": offset,
+            "limit": limit,
+            "next_offset": offset + len(items),
+            "has_more": has_more,
+        }
+    )
 
 
 @require_http_methods(["GET", "POST"])
@@ -195,6 +214,30 @@ def _message_content_type(*, text: str, has_files: bool) -> str:
     if has_files:
         return Message.ContentType.FILE
     return Message.ContentType.TEXT
+
+
+def _positive_int(value: str | None, *, default: int, maximum: int) -> int:
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0, min(parsed, maximum))
+
+
+def _filter_conversations(queryset, search: str):
+    terms = [term for term in search.split() if term]
+    for term in terms:
+        queryset = queryset.filter(
+            Q(contact__max_user_id__icontains=term)
+            | Q(contact__username__icontains=term)
+            | Q(contact__first_name__icontains=term)
+            | Q(contact__last_name__icontains=term)
+            | Q(contact__legacy_name__icontains=term)
+            | Q(max_chat_id__icontains=term)
+        )
+    return queryset
 
 
 def _create_outgoing_attachment(*, message: Message, uploaded_file, manager) -> MessageAttachment:

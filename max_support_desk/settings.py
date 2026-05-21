@@ -187,7 +187,8 @@ UNFOLD = {
     "SITE_TITLE": "MAX Support Desk",
     "SITE_HEADER": "MAX Support Desk",
     "SITE_URL": None,
-    "THEME": "light",
+    "THEME": None,
+    "SCRIPTS": ["/static/admin-theme-default.js"],
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": True,

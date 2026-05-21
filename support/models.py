@@ -29,6 +29,8 @@ class MaxContact(TimestampedModel):
 
     class Meta:
         ordering = ["-last_seen_at", "id"]
+        verbose_name = "пользователь MAX"
+        verbose_name_plural = "Пользователи MAX"
 
     def __str__(self) -> str:
         if self.username:
@@ -39,16 +41,16 @@ class MaxContact(TimestampedModel):
 
 class Conversation(TimestampedModel):
     class RecipientType(models.TextChoices):
-        USER = "user", "User"
-        CHAT = "chat", "Chat"
-        CHANNEL = "channel", "Channel"
-        UNKNOWN = "unknown", "Unknown"
+        USER = "user", "Пользователь"
+        CHAT = "chat", "Чат"
+        CHANNEL = "channel", "Канал"
+        UNKNOWN = "unknown", "Неизвестно"
 
     class Status(models.TextChoices):
-        NEW = "new", "New"
-        OPEN = "open", "Open"
-        PENDING = "pending", "Pending"
-        CLOSED = "closed", "Closed"
+        NEW = "new", "Новый"
+        OPEN = "open", "Открыт"
+        PENDING = "pending", "Ожидает"
+        CLOSED = "closed", "Закрыт"
 
     contact = models.ForeignKey(MaxContact, on_delete=models.PROTECT, related_name="conversations")
     max_chat_id = models.CharField(max_length=128, blank=True, db_index=True)
@@ -84,6 +86,8 @@ class Conversation(TimestampedModel):
             models.Index(fields=["max_chat_id"]),
         ]
         ordering = ["-last_message_at", "-updated_at", "id"]
+        verbose_name = "чат"
+        verbose_name_plural = "Чаты"
 
     def __str__(self) -> str:
         return f"Conversation #{self.pk} with {self.contact}"
@@ -91,10 +95,10 @@ class Conversation(TimestampedModel):
 
 class RawUpdate(models.Model):
     class Status(models.TextChoices):
-        RECEIVED = "received", "Received"
-        PROCESSED = "processed", "Processed"
-        IGNORED = "ignored", "Ignored"
-        FAILED = "failed", "Failed"
+        RECEIVED = "received", "Получено"
+        PROCESSED = "processed", "Обработано"
+        IGNORED = "ignored", "Проигнорировано"
+        FAILED = "failed", "Ошибка"
 
     update_type = models.CharField(max_length=128, blank=True)
     max_timestamp = models.DateTimeField(null=True, blank=True)
@@ -109,6 +113,8 @@ class RawUpdate(models.Model):
 
     class Meta:
         ordering = ["-received_at", "id"]
+        verbose_name = "сырое событие MAX"
+        verbose_name_plural = "Сырые события MAX"
 
     def __str__(self) -> str:
         return f"{self.update_type or 'update'}:{self.dedupe_key}"
@@ -140,33 +146,33 @@ class MessageQuerySet(QuerySet):
 
 class Message(TimestampedModel):
     class Direction(models.TextChoices):
-        INCOMING = "incoming", "Incoming"
-        OUTGOING = "outgoing", "Outgoing"
+        INCOMING = "incoming", "Входящее"
+        OUTGOING = "outgoing", "Исходящее"
 
     class SenderKind(models.TextChoices):
-        MAX_USER = "max_user", "MAX user"
-        MANAGER = "manager", "Manager"
-        SYSTEM = "system", "System"
+        MAX_USER = "max_user", "Пользователь MAX"
+        MANAGER = "manager", "Менеджер"
+        SYSTEM = "system", "Система"
 
     class TextFormat(models.TextChoices):
-        PLAIN = "plain", "Plain"
+        PLAIN = "plain", "Обычный текст"
         HTML = "html", "HTML"
         MARKDOWN = "markdown", "Markdown"
-        UNKNOWN = "unknown", "Unknown"
+        UNKNOWN = "unknown", "Неизвестно"
 
     class ContentType(models.TextChoices):
-        TEXT = "text", "Text"
-        FILE = "file", "File"
-        MIXED = "mixed", "Mixed"
-        SERVICE = "service", "Service"
-        UNSUPPORTED = "unsupported", "Unsupported"
+        TEXT = "text", "Текст"
+        FILE = "file", "Файл"
+        MIXED = "mixed", "Текст и файл"
+        SERVICE = "service", "Сервисное"
+        UNSUPPORTED = "unsupported", "Не поддерживается"
 
     class SendStatus(models.TextChoices):
-        NOT_APPLICABLE = "not_applicable", "Not applicable"
-        QUEUED = "queued", "Queued"
-        SENDING = "sending", "Sending"
-        SENT = "sent", "Sent"
-        FAILED = "failed", "Failed"
+        NOT_APPLICABLE = "not_applicable", "Не применяется"
+        QUEUED = "queued", "В очереди"
+        SENDING = "sending", "Отправляется"
+        SENT = "sent", "Отправлено"
+        FAILED = "failed", "Ошибка"
 
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="messages")
     contact = models.ForeignKey(MaxContact, on_delete=models.PROTECT, related_name="messages")
@@ -231,6 +237,8 @@ class Message(TimestampedModel):
             models.Index(fields=["contact", "created_at"]),
         ]
         ordering = ["id"]
+        verbose_name = "сообщение"
+        verbose_name_plural = "Сообщения"
 
     def clean(self) -> None:
         errors = {}
@@ -265,19 +273,19 @@ class Message(TimestampedModel):
 
 class MessageAttachment(models.Model):
     class AttachmentType(models.TextChoices):
-        IMAGE = "image", "Image"
-        VIDEO = "video", "Video"
-        AUDIO = "audio", "Audio"
-        FILE = "file", "File"
-        INLINE_KEYBOARD = "inline_keyboard", "Inline keyboard"
-        UNKNOWN = "unknown", "Unknown"
+        IMAGE = "image", "Изображение"
+        VIDEO = "video", "Видео"
+        AUDIO = "audio", "Аудио"
+        FILE = "file", "Файл"
+        INLINE_KEYBOARD = "inline_keyboard", "Кнопки"
+        UNKNOWN = "unknown", "Неизвестно"
 
     class UploadStatus(models.TextChoices):
-        NOT_NEEDED = "not_needed", "Not needed"
-        PENDING = "pending", "Pending"
-        UPLOADED = "uploaded", "Uploaded"
-        READY = "ready", "Ready"
-        FAILED = "failed", "Failed"
+        NOT_NEEDED = "not_needed", "Не требуется"
+        PENDING = "pending", "Ожидает"
+        UPLOADED = "uploaded", "Загружено"
+        READY = "ready", "Готово"
+        FAILED = "failed", "Ошибка"
 
     message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="attachments")
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="attachments")
@@ -321,6 +329,8 @@ class MessageAttachment(models.Model):
             models.Index(fields=["upload_status", "created_at"]),
         ]
         ordering = ["id"]
+        verbose_name = "вложение"
+        verbose_name_plural = "Вложения"
 
     def __str__(self) -> str:
         return self.original_file_name or f"{self.attachment_type} attachment #{self.pk}"
@@ -354,6 +364,8 @@ class ManagerActionLog(models.Model):
 
     class Meta:
         ordering = ["-created_at", "id"]
+        verbose_name = "лог действия менеджера"
+        verbose_name_plural = "Логи действий менеджеров"
 
     def __str__(self) -> str:
         return f"{self.action} by {self.manager_id or 'system'}"
@@ -361,10 +373,10 @@ class ManagerActionLog(models.Model):
 
 class DeliveryAttempt(models.Model):
     class Status(models.TextChoices):
-        STARTED = "started", "Started"
-        SUCCESS = "success", "Success"
-        FAILED = "failed", "Failed"
-        RETRY_SCHEDULED = "retry_scheduled", "Retry scheduled"
+        STARTED = "started", "Начата"
+        SUCCESS = "success", "Успешно"
+        FAILED = "failed", "Ошибка"
+        RETRY_SCHEDULED = "retry_scheduled", "Повтор запланирован"
 
     message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="delivery_attempts")
     attempt_no = models.PositiveIntegerField()
@@ -379,6 +391,8 @@ class DeliveryAttempt(models.Model):
     class Meta:
         unique_together = [("message", "attempt_no")]
         ordering = ["-created_at", "id"]
+        verbose_name = "попытка доставки"
+        verbose_name_plural = "Попытки доставки"
 
     def __str__(self) -> str:
         return f"attempt {self.attempt_no} for message {self.message_id}"

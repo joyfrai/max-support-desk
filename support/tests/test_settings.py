@@ -14,8 +14,9 @@ def test_channel_layer_uses_redis_when_redis_url_is_set() -> None:
     assert layer["CONFIG"] == {"hosts": ["redis://redis:6379/0"]}
 
 
-def test_unfold_preview_uses_light_theme_and_hides_site_link() -> None:
-    assert project_settings.UNFOLD["THEME"] == "light"
+def test_unfold_uses_theme_switch_with_light_default_script_and_hides_site_link() -> None:
+    assert project_settings.UNFOLD["THEME"] is None
+    assert "/static/admin-theme-default.js" in project_settings.UNFOLD["SCRIPTS"]
     assert project_settings.UNFOLD["SITE_URL"] is None
 
 

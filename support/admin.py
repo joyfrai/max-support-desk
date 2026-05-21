@@ -17,7 +17,7 @@ from .models import (
 )
 
 
-@admin.action(description="Export selected MAX users to CSV")
+@admin.action(description="Выгрузить выбранных пользователей MAX в CSV")
 def export_max_contacts_csv(
     modeladmin: ModelAdmin,
     request: HttpRequest,

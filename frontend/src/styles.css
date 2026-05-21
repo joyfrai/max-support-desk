@@ -9,6 +9,15 @@
   border-radius: 8px;
 }
 
+.support-desk-search {
+  flex: 0 0 auto;
+  padding: 8px;
+}
+
+.support-desk-shell .cs-conversation__unread {
+  background-color: #0ea5e9;
+}
+
 .support-desk-error {
   background: #fff4f4;
   border: 1px solid #f0b8b8;

@@ -26,11 +26,11 @@ def author_display(message: Message) -> str:
     if message.direction == Message.Direction.INCOMING:
         contact = message.contact
         if contact.username:
-            return f"MAX: @{contact.username}"
-        full_name = " ".join(part for part in [contact.first_name, contact.last_name] if part)
-        return f"MAX: {full_name}" if full_name else f"MAX user {contact.max_user_id}"
+            return f"@{contact.username}"
+        full_name = " ".join(part for part in [contact.last_name, contact.first_name] if part)
+        return full_name or f"MAX user {contact.max_user_id}"
     if message.sender_kind == Message.SenderKind.MANAGER and message.manager:
-        return f"Менеджер: {manager_display(message.manager)}"
+        return manager_display(message.manager)
     return "Система"
 
 

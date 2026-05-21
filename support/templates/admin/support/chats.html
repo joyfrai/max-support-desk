@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'support-desk.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="support-desk-root" data-api-base="/api/"></div>
+<script type="module" src="{% static 'support-desk.js' %}"></script>
+{% endblock %}

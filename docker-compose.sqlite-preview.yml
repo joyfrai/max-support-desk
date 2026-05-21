@@ -1,0 +1,26 @@
+services:
+  web:
+    environment:
+      DATABASE_URL: sqlite:////app/data/db.sqlite3
+      DJANGO_SECRET_KEY: local-preview-only
+      DJANGO_DEBUG: "true"
+      DJANGO_ALLOWED_HOSTS: 127.0.0.1,localhost
+      MAX_BOT_TOKEN: local-preview
+      MAX_WEBHOOK_SECRET: local-preview
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - sqlite_data:/app/data
+      - media:/app/media
+    command: >
+      sh -c "
+      python manage.py migrate --noinput &&
+      python manage.py seed_demo_data --username admin --password admin12345 &&
+      daphne -b 0.0.0.0 -p 8000 max_support_desk.asgi:application
+      "
+
+  worker:
+    profiles:
+      - worker
+
+volumes:
+  sqlite_data:

@@ -41,6 +41,7 @@
 - Закрепление менеджера за чатом опционально и не блокирует остальных.
 - Автор каждого исходящего сообщения сохраняется.
 - Footer сообщения в Chatscope показывает автора.
+- Логирование всех важных действий и service events.
 - Docker deployment.
 - External MySQL.
 
@@ -63,6 +64,7 @@ Backend:
 - Django ORM.
 - Django Admin.
 - Django session auth.
+- Django Unfold для современной темы admin/UI shell.
 
 Frontend:
 
@@ -74,6 +76,9 @@ Frontend:
 Realtime:
 
 - Предпочтительно Django Channels + WebSocket.
+- Production channel layer: Redis через официально поддерживаемый `channels_redis`.
+- Redis запускается как внутренний Docker service без published `ports`; Django подключается по `REDIS_URL=redis://redis:6379/0`.
+- Если `REDIS_URL` не задан, local/tests используют `InMemoryChannelLayer`.
 - Для надежности оставить polling fallback.
 
 Background jobs:
@@ -84,13 +89,48 @@ Background jobs:
 Database:
 
 - External MySQL.
+- Tests run on SQLite.
+- Production uses Django MySQL backend `django.db.backends.mysql` with the standard `mysqlclient` Python driver.
 
 Deployment:
 
 - Docker.
+- Static files are served from `STATIC_ROOT` by WhiteNoise middleware in the Django/Daphne container.
+- Web service publishes host port `8066` to container port `8000`.
+- Redis service is internal-only in Docker Compose and must not publish `6379` to host/internet.
 - MySQL не поднимаем обязательным сервисом в compose, потому что БД внешняя.
 
-## 3.1. Локальные референсы реализации
+## 3.1. Native-by-docs implementation rule
+
+Важное правило реализации:
+
+- все решения реализуются нативно по официальной документации используемых библиотек;
+- перед внедрением framework/library behavior сверяется с документацией, а не придумывается "своя версия";
+- если есть стандартный механизм Django/Admin/Unfold/Channels/Chatscope, использовать его;
+- кастомный код писать только там, где стандартного механизма нет или он не закрывает конкретное требование;
+- решения по MAX payload/API сверять с MAX docs и локальным reference project;
+- при сомнении фиксировать ссылку на документацию в комментарии плана/issue, а не угадывать.
+
+Context7 MCP docs anchors для реализации:
+
+- Django: `/websites/djangoproject_en_5_2`
+- Django source/package docs: `/django/django`
+- Django Unfold: `/unfoldadmin/django-unfold`
+- Django Channels: `/django/channels`
+- Vite: `/vitejs/vite`
+- Chatscope React UI Kit: `/chatscope/chat-ui-kit-react`
+
+Дополнительные official web docs:
+
+- Django docs: https://docs.djangoproject.com/en/5.2/
+- Django admin actions: https://docs.djangoproject.com/en/5.2/ref/contrib/admin/actions/
+- Django databases: https://docs.djangoproject.com/en/5.2/ref/databases/
+- Unfold docs: https://unfoldadmin.com/docs/
+- Channels docs: https://channels.readthedocs.io/
+- Vite docs: https://vite.dev/
+- Chatscope docs: https://chatscope.io/docs/
+
+## 3.2. Локальные референсы реализации
 
 Для работы с MAX использовать как reference project:
 
@@ -583,24 +623,32 @@ Payload:
 - при reconnect UI делает sync через API;
 - если есть пропуск message id, UI делает `GET /api/conversations/{id}/messages/?after_id=<last_seen_id>`.
 
-## 12. Chatscope inside Django
+## 12. Manager UI in Django Admin + Unfold
 
 Решение:
 
-- Chatscope делаем отдельным staff-only Django view.
-- Не встраиваем полноценный рабочий чат в стандартные Django Admin changeform/changelist.
+- Основной интерфейс менеджера работает внутри Django Admin shell на теме Unfold.
+- Менеджер логинится через стандартный Django/Admin login.
+- Менеджер — это Django `User` с `is_staff=True`.
+- После входа менеджер видит список пользователей MAX (`MaxContact`) в Django Admin.
+- В admin/sidebar есть пункт "Чаты".
+- При переходе в "Чаты" в content area открывается React/Chatscope UI.
+- Sidebar Django/Unfold остается на экране.
+- Не встраиваем Chatscope в стандартные model changeform/changelist; делаем custom admin page.
 
 Маршруты:
 
-- `/support/` — список чатов и Chatscope app.
-- `/support/conversations/<id>/` — прямое открытие конкретного чата.
-- `/admin/` — Django Admin.
+- `/admin/` — Django Admin + Unfold shell.
+- `/admin/support/maxcontact/` — список пользователей MAX.
+- `/admin/support/chats/` — custom admin page с Chatscope app.
+- `/support/` — optional redirect на `/admin/support/chats/` для короткого URL.
+- `/support/conversations/<id>/` — optional redirect/deep-link на Chatscope с выбранным conversation.
 
 Внедрение:
 
 1. React/Chatscope build через Vite.
 2. Build кладется в Django static files.
-3. Django template `support/chat.html` подключает JS/CSS bundle.
+3. Django/Unfold custom admin template подключает JS/CSS bundle.
 4. Auth через обычную Django session.
 5. API под той же session auth.
 6. CSRF для POST.
@@ -609,9 +657,23 @@ Payload:
 Пользовательский опыт:
 
 - менеджер логинится один раз;
-- из admin/menu переходит в "Чаты";
+- стартовая рабочая зона — список пользователей MAX;
+- из admin/sidebar переходит в "Чаты";
 - отдельной авторизации для chat UI нет;
-- визуально это часть одного Django приложения.
+- визуально это часть одного Django/Unfold приложения.
+
+CSV export:
+
+- Django не дает готовую кнопку "export CSV" из коробки.
+- Django дает нативный механизм admin actions.
+- Для `MaxContact` делаем admin action/custom admin URL, который возвращает CSV response.
+- Для больших объемов использовать streaming response.
+
+Superuser/service UX:
+
+- Все основные таблицы регистрируются в Django Admin.
+- Superuser видит служебные таблицы: `RawUpdate`, `Message`, `MessageAttachment`, `DeliveryAttempt`, `ManagerActionLog`.
+- Staff managers видят только разрешенные рабочие разделы по permissions/groups.
 
 ## 13. Chatscope footer автора
 
@@ -729,6 +791,56 @@ JSON API:
 - Для outbound использовать `Message.id` как idempotency anchor.
 - Соблюдать MAX rate limit 30 rps.
 
+## 17.1. Logging and audit
+
+Обязательное требование:
+
+- логировать все важные действия менеджеров и системы;
+- бизнес-аудит хранить в БД через `ManagerActionLog`;
+- технические service events писать в structured application logs;
+- не писать в stdout полные raw payloads, токены, secrets, cookies, session IDs и содержимое приватных файлов.
+
+Manager audit в БД:
+
+- login/logout при необходимости через Django signals или admin history, если это не усложняет MVP;
+- назначение/снятие `assigned_to`;
+- закрытие/переоткрытие conversation;
+- отправка outgoing message;
+- retry failed message;
+- upload/download attachment;
+- CSV export;
+- service/admin actions над raw updates/messages/attachments.
+
+Service logs:
+
+- webhook received/processed/duplicate/failed;
+- MAX contact upsert;
+- conversation created/updated;
+- message created/status changed;
+- worker picked/sent/failed/retried message;
+- MAX API request result without token and without full private payload;
+- file upload/download metadata without file content;
+- permission denied/security-relevant events.
+
+Log format:
+
+- timestamp;
+- event name;
+- severity;
+- request id/correlation id if available;
+- actor user id for manager actions;
+- conversation id/message id/contact id where available;
+- external MAX ids where safe;
+- error code and short sanitized error text.
+
+MVP defaults:
+
+- DB audit через `ManagerActionLog`;
+- outbound delivery diagnostics через `DeliveryAttempt`;
+- app logs через standard Python `logging` to stdout for Docker/systemd;
+- raw webhook payload хранится в `RawUpdate.payload`, но не печатается целиком в logs.
+- retention для audit/service logs: 7 дней.
+
 ## 18. Acceptance criteria
 
 1. Если пользователь написал в MAX, сообщение сохраняется в БД.
@@ -749,6 +861,8 @@ JSON API:
 16. Chat UI работает внутри Django по `/support/`.
 17. CSV export пользователей доступен из web-админки.
 18. Файлы можно принять от пользователя и отправить пользователю.
+19. Важные manager actions пишутся в `ManagerActionLog`.
+20. Важные service events пишутся в structured logs без secrets/raw payload dumps.
 
 ## 19. План реализации 80/20
 

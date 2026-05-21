@@ -1,0 +1,28 @@
+.support-desk-shell {
+  height: calc(100vh - 190px);
+  min-height: 560px;
+  position: relative;
+}
+
+.support-desk-shell .cs-main-container {
+  border: 1px solid var(--border-color, #d9dee8);
+  border-radius: 8px;
+}
+
+.support-desk-error {
+  background: #fff4f4;
+  border: 1px solid #f0b8b8;
+  border-radius: 6px;
+  color: #8a1f1f;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+}
+
+.support-desk-retry {
+  border: 1px solid #c54040;
+  border-radius: 4px;
+  color: #9b2020;
+  font-size: 12px;
+  margin-top: 4px;
+  padding: 2px 8px;
+}

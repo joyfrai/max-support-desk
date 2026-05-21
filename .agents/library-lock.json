@@ -1,0 +1,293 @@
+{
+  "generated_at": "2026-05-21T20:25:31.341584+00:00",
+  "library_root": "/root/projects/ai-library",
+  "project_dir": "/root/projects/max-support-desk",
+  "skills": [
+    {
+      "skill_id": "obra_superpowers::skills/using-superpowers",
+      "repo_id": "obra_superpowers",
+      "repo_commit": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "trust_tier": "staging",
+      "domains": [],
+      "source": "/root/projects/ai-library/sources/obra_superpowers/skills/using-superpowers",
+      "destination": "/root/projects/max-support-desk/.agents/skills/using-superpowers"
+    },
+    {
+      "skill_id": "obra_superpowers::skills/writing-plans",
+      "repo_id": "obra_superpowers",
+      "repo_commit": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "trust_tier": "staging",
+      "domains": [
+        "docs",
+        "testing"
+      ],
+      "source": "/root/projects/ai-library/sources/obra_superpowers/skills/writing-plans",
+      "destination": "/root/projects/max-support-desk/.agents/skills/writing-plans"
+    },
+    {
+      "skill_id": "obra_superpowers::skills/executing-plans",
+      "repo_id": "obra_superpowers",
+      "repo_commit": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "trust_tier": "staging",
+      "domains": [],
+      "source": "/root/projects/ai-library/sources/obra_superpowers/skills/executing-plans",
+      "destination": "/root/projects/max-support-desk/.agents/skills/executing-plans"
+    },
+    {
+      "skill_id": "obra_superpowers::skills/test-driven-development",
+      "repo_id": "obra_superpowers",
+      "repo_commit": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "trust_tier": "staging",
+      "domains": [
+        "testing"
+      ],
+      "source": "/root/projects/ai-library/sources/obra_superpowers/skills/test-driven-development",
+      "destination": "/root/projects/max-support-desk/.agents/skills/test-driven-development"
+    },
+    {
+      "skill_id": "obra_superpowers::skills/systematic-debugging",
+      "repo_id": "obra_superpowers",
+      "repo_commit": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "trust_tier": "staging",
+      "domains": [],
+      "source": "/root/projects/ai-library/sources/obra_superpowers/skills/systematic-debugging",
+      "destination": "/root/projects/max-support-desk/.agents/skills/systematic-debugging"
+    },
+    {
+      "skill_id": "obra_superpowers::skills/verification-before-completion",
+      "repo_id": "obra_superpowers",
+      "repo_commit": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "trust_tier": "staging",
+      "domains": [],
+      "source": "/root/projects/ai-library/sources/obra_superpowers/skills/verification-before-completion",
+      "destination": "/root/projects/max-support-desk/.agents/skills/verification-before-completion"
+    },
+    {
+      "skill_id": "obra_superpowers::skills/dispatching-parallel-agents",
+      "repo_id": "obra_superpowers",
+      "repo_commit": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "trust_tier": "staging",
+      "domains": [],
+      "source": "/root/projects/ai-library/sources/obra_superpowers/skills/dispatching-parallel-agents",
+      "destination": "/root/projects/max-support-desk/.agents/skills/dispatching-parallel-agents"
+    },
+    {
+      "skill_id": "obra_superpowers::skills/finishing-a-development-branch",
+      "repo_id": "obra_superpowers",
+      "repo_commit": "f2cbfbefebbfef77321e4c9abc9e949826bea9d7",
+      "trust_tier": "staging",
+      "domains": [],
+      "source": "/root/projects/ai-library/sources/obra_superpowers/skills/finishing-a-development-branch",
+      "destination": "/root/projects/max-support-desk/.agents/skills/finishing-a-development-branch"
+    },
+    {
+      "skill_id": "proflead_codex_skills_library::skills/architecture/domain-modeling",
+      "repo_id": "proflead_codex_skills_library",
+      "repo_commit": "7c8c9bed208007531cc50a7df6abb244798daeb7",
+      "trust_tier": "reviewed",
+      "domains": [
+        "ai_ml"
+      ],
+      "source": "/root/projects/ai-library/sources/proflead_codex-skills-library/skills/architecture/domain-modeling",
+      "destination": "/root/projects/max-support-desk/.agents/skills/domain-modeling"
+    },
+    {
+      "skill_id": "proflead_codex_skills_library::skills/backend/queue-processing-patterns",
+      "repo_id": "proflead_codex_skills_library",
+      "repo_commit": "7c8c9bed208007531cc50a7df6abb244798daeb7",
+      "trust_tier": "reviewed",
+      "domains": [
+        "backend"
+      ],
+      "source": "/root/projects/ai-library/sources/proflead_codex-skills-library/skills/backend/queue-processing-patterns",
+      "destination": "/root/projects/max-support-desk/.agents/skills/queue-processing-patterns"
+    },
+    {
+      "skill_id": "proflead_codex_skills_library::skills/data/db-migration-reviewer",
+      "repo_id": "proflead_codex_skills_library",
+      "repo_commit": "7c8c9bed208007531cc50a7df6abb244798daeb7",
+      "trust_tier": "reviewed",
+      "domains": [
+        "data",
+        "backend"
+      ],
+      "source": "/root/projects/ai-library/sources/proflead_codex-skills-library/skills/data/db-migration-reviewer",
+      "destination": "/root/projects/max-support-desk/.agents/skills/db-migration-reviewer"
+    },
+    {
+      "skill_id": "proflead_codex_skills_library::skills/testing/integration-test-planner",
+      "repo_id": "proflead_codex_skills_library",
+      "repo_commit": "7c8c9bed208007531cc50a7df6abb244798daeb7",
+      "trust_tier": "reviewed",
+      "domains": [
+        "testing"
+      ],
+      "source": "/root/projects/ai-library/sources/proflead_codex-skills-library/skills/testing/integration-test-planner",
+      "destination": "/root/projects/max-support-desk/.agents/skills/integration-test-planner"
+    },
+    {
+      "skill_id": "proflead_codex_skills_library::skills/frontend/accessibility-basic-check",
+      "repo_id": "proflead_codex_skills_library",
+      "repo_commit": "7c8c9bed208007531cc50a7df6abb244798daeb7",
+      "trust_tier": "reviewed",
+      "domains": [
+        "frontend"
+      ],
+      "source": "/root/projects/ai-library/sources/proflead_codex-skills-library/skills/frontend/accessibility-basic-check",
+      "destination": "/root/projects/max-support-desk/.agents/skills/accessibility-basic-check"
+    },
+    {
+      "skill_id": "proflead_codex_skills_library::skills/security/threat-modeling",
+      "repo_id": "proflead_codex_skills_library",
+      "repo_commit": "7c8c9bed208007531cc50a7df6abb244798daeb7",
+      "trust_tier": "reviewed",
+      "domains": [
+        "security"
+      ],
+      "source": "/root/projects/ai-library/sources/proflead_codex-skills-library/skills/security/threat-modeling",
+      "destination": "/root/projects/max-support-desk/.agents/skills/threat-modeling"
+    },
+    {
+      "skill_id": "proflead_codex_skills_library::skills/infra/observability-setup",
+      "repo_id": "proflead_codex_skills_library",
+      "repo_commit": "7c8c9bed208007531cc50a7df6abb244798daeb7",
+      "trust_tier": "reviewed",
+      "domains": [
+        "devops"
+      ],
+      "source": "/root/projects/ai-library/sources/proflead_codex-skills-library/skills/infra/observability-setup",
+      "destination": "/root/projects/max-support-desk/.agents/skills/observability-setup"
+    },
+    {
+      "skill_id": "browserbase_skills::skills/ui-test",
+      "repo_id": "browserbase_skills",
+      "repo_commit": "b2ae7283497efec71533d292b19b874dd9d0fc4e",
+      "trust_tier": "staging",
+      "domains": [
+        "testing",
+        "frontend"
+      ],
+      "source": "/root/projects/ai-library/sources/browserbase_skills/skills/ui-test",
+      "destination": "/root/projects/max-support-desk/.agents/skills/ui-test"
+    },
+    {
+      "skill_id": "mattpocock_skills::skills/engineering/improve-codebase-architecture",
+      "repo_id": "mattpocock_skills",
+      "repo_commit": "b8be62ffacb0118fa3eaa29a0923c87c8c11985c",
+      "trust_tier": "reviewed",
+      "domains": [],
+      "source": "/root/projects/ai-library/sources/mattpocock_skills/skills/engineering/improve-codebase-architecture",
+      "destination": "/root/projects/max-support-desk/.agents/skills/improve-codebase-architecture"
+    },
+    {
+      "skill_id": "mattpocock_skills::skills/engineering/grill-with-docs",
+      "repo_id": "mattpocock_skills",
+      "repo_commit": "b8be62ffacb0118fa3eaa29a0923c87c8c11985c",
+      "trust_tier": "reviewed",
+      "domains": [],
+      "source": "/root/projects/ai-library/sources/mattpocock_skills/skills/engineering/grill-with-docs",
+      "destination": "/root/projects/max-support-desk/.agents/skills/grill-with-docs"
+    }
+  ],
+  "agents": [
+    {
+      "agent_id": "msitarzewski_agency_agents::engineering/engineering-backend-architect.md",
+      "repo_id": "msitarzewski_agency_agents",
+      "repo_commit": "783f6a72bfd7f3135700ac273c619d92821b419a",
+      "trust_tier": "staging",
+      "domains": [
+        "backend"
+      ],
+      "source": "/root/projects/ai-library/sources/msitarzewski_agency-agents/engineering/engineering-backend-architect.md",
+      "destination": "/root/projects/max-support-desk/.codex/agents/engineering-backend-architect.toml",
+      "adapted_to": "codex_agent_toml"
+    },
+    {
+      "agent_id": "msitarzewski_agency_agents::engineering/engineering-database-optimizer.md",
+      "repo_id": "msitarzewski_agency_agents",
+      "repo_commit": "783f6a72bfd7f3135700ac273c619d92821b419a",
+      "trust_tier": "staging",
+      "domains": [
+        "ai_ml",
+        "backend"
+      ],
+      "source": "/root/projects/ai-library/sources/msitarzewski_agency-agents/engineering/engineering-database-optimizer.md",
+      "destination": "/root/projects/max-support-desk/.codex/agents/engineering-database-optimizer.toml",
+      "adapted_to": "codex_agent_toml"
+    },
+    {
+      "agent_id": "msitarzewski_agency_agents::engineering/engineering-frontend-developer.md",
+      "repo_id": "msitarzewski_agency_agents",
+      "repo_commit": "783f6a72bfd7f3135700ac273c619d92821b419a",
+      "trust_tier": "staging",
+      "domains": [
+        "frontend"
+      ],
+      "source": "/root/projects/ai-library/sources/msitarzewski_agency-agents/engineering/engineering-frontend-developer.md",
+      "destination": "/root/projects/max-support-desk/.codex/agents/engineering-frontend-developer.toml",
+      "adapted_to": "codex_agent_toml"
+    },
+    {
+      "agent_id": "msitarzewski_agency_agents::engineering/engineering-devops-automator.md",
+      "repo_id": "msitarzewski_agency_agents",
+      "repo_commit": "783f6a72bfd7f3135700ac273c619d92821b419a",
+      "trust_tier": "staging",
+      "domains": [
+        "devops",
+        "data"
+      ],
+      "source": "/root/projects/ai-library/sources/msitarzewski_agency-agents/engineering/engineering-devops-automator.md",
+      "destination": "/root/projects/max-support-desk/.codex/agents/engineering-devops-automator.toml",
+      "adapted_to": "codex_agent_toml"
+    },
+    {
+      "agent_id": "msitarzewski_agency_agents::engineering/engineering-security-engineer.md",
+      "repo_id": "msitarzewski_agency_agents",
+      "repo_commit": "783f6a72bfd7f3135700ac273c619d92821b419a",
+      "trust_tier": "staging",
+      "domains": [
+        "security",
+        "backend"
+      ],
+      "source": "/root/projects/ai-library/sources/msitarzewski_agency-agents/engineering/engineering-security-engineer.md",
+      "destination": "/root/projects/max-support-desk/.codex/agents/engineering-security-engineer.toml",
+      "adapted_to": "codex_agent_toml"
+    },
+    {
+      "agent_id": "msitarzewski_agency_agents::engineering/engineering-code-reviewer.md",
+      "repo_id": "msitarzewski_agency_agents",
+      "repo_commit": "783f6a72bfd7f3135700ac273c619d92821b419a",
+      "trust_tier": "staging",
+      "domains": [
+        "security"
+      ],
+      "source": "/root/projects/ai-library/sources/msitarzewski_agency-agents/engineering/engineering-code-reviewer.md",
+      "destination": "/root/projects/max-support-desk/.codex/agents/engineering-code-reviewer.toml",
+      "adapted_to": "codex_agent_toml"
+    },
+    {
+      "agent_id": "msitarzewski_agency_agents::design/design-ux-architect.md",
+      "repo_id": "msitarzewski_agency_agents",
+      "repo_commit": "783f6a72bfd7f3135700ac273c619d92821b419a",
+      "trust_tier": "staging",
+      "domains": [
+        "frontend"
+      ],
+      "source": "/root/projects/ai-library/sources/msitarzewski_agency-agents/design/design-ux-architect.md",
+      "destination": "/root/projects/max-support-desk/.codex/agents/design-ux-architect.toml",
+      "adapted_to": "codex_agent_toml"
+    },
+    {
+      "agent_id": "msitarzewski_agency_agents::project-management/project-management-project-shepherd.md",
+      "repo_id": "msitarzewski_agency_agents",
+      "repo_commit": "783f6a72bfd7f3135700ac273c619d92821b419a",
+      "trust_tier": "staging",
+      "domains": [
+        "product"
+      ],
+      "source": "/root/projects/ai-library/sources/msitarzewski_agency-agents/project-management/project-management-project-shepherd.md",
+      "destination": "/root/projects/max-support-desk/.codex/agents/project-management-project-shepherd.toml",
+      "adapted_to": "codex_agent_toml"
+    }
+  ]
+}

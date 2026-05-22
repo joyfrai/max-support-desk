@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from support.models import Conversation, DeliveryAttempt, MaxContact, Message, MessageAttachment
-from support.services.outbound import process_next_queued_message
+from support.services.outbound import _queued_outgoing_messages_for_claim, process_next_queued_message
 
 
 class FakeMaxClient:
@@ -176,3 +176,11 @@ def test_process_next_queued_message_failure_marks_failed_and_records_attempt(
 @pytest.mark.django_db
 def test_process_next_queued_message_returns_none_when_queue_empty() -> None:
     assert process_next_queued_message(max_client=FakeMaxClient()) is None
+
+
+@pytest.mark.django_db
+def test_queued_outgoing_messages_for_claim_uses_row_lock_when_supported() -> None:
+    queryset = _queued_outgoing_messages_for_claim(skip_locked=True)
+
+    assert queryset.query.select_for_update is True
+    assert queryset.query.select_for_update_skip_locked is True

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
 
 from support.max_client import MaxApiError, MaxClient
@@ -12,16 +12,21 @@ from support.realtime import message_status_payload, publish_event
 logger = logging.getLogger("support.worker")
 
 
+def _queued_outgoing_messages_for_claim(*, skip_locked: bool):
+    return (
+        Message.objects.select_for_update(skip_locked=skip_locked)
+        .select_related("conversation", "contact", "manager")
+        .prefetch_related("attachments")
+        .filter(direction=Message.Direction.OUTGOING, send_status=Message.SendStatus.QUEUED)
+        .order_by("id")
+    )
+
+
 def process_next_queued_message(*, max_client: MaxClient | None = None) -> Message | None:
     max_client = max_client or MaxClient()
     with transaction.atomic():
-        message = (
-            Message.objects.select_related("conversation", "contact", "manager")
-            .prefetch_related("attachments")
-            .filter(direction=Message.Direction.OUTGOING, send_status=Message.SendStatus.QUEUED)
-            .order_by("id")
-            .first()
-        )
+        skip_locked = connection.features.has_select_for_update_skip_locked
+        message = _queued_outgoing_messages_for_claim(skip_locked=skip_locked).first()
         if message is None:
             return None
         message.send_status = Message.SendStatus.SENDING

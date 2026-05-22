@@ -4,7 +4,9 @@ import hashlib
 import ipaddress
 import json
 import logging
+import mimetypes
 import socket
+from email.message import Message as EmailMessage
 from functools import wraps
 from pathlib import PurePath
 from urllib.parse import urlparse
@@ -224,6 +226,7 @@ def attachment_download_api(request: HttpRequest, attachment_id: int) -> HttpRes
         attachment.refresh_from_db()
     if not attachment.stored_file:
         raise Http404("Attachment file is not stored")
+    _ensure_attachment_download_filename(attachment)
     log_manager_action(
         manager=request.user,
         action="attachment.download",
@@ -329,8 +332,13 @@ def _store_remote_attachment_file(attachment: MessageAttachment) -> None:
         logger.warning("attachment_download_empty attachment_id=%s", attachment.id)
         return
 
-    file_name = attachment.original_file_name or _filename_from_url(remote_url) or f"max-attachment-{attachment.id}"
     content_type = response.headers.get("content-type", "").split(";", 1)[0] or "application/octet-stream"
+    file_name = _download_file_name(
+        attachment=attachment,
+        remote_url=remote_url,
+        content_type=content_type,
+        content_disposition=response.headers.get("content-disposition", ""),
+    )
 
     attachment.stored_file.save(file_name, ContentFile(data), save=False)
     attachment.original_file_name = file_name
@@ -430,3 +438,44 @@ def _host_resolves_to_public_ips(hostname: str) -> bool:
 def _filename_from_url(url: str) -> str:
     name = PurePath(urlparse(url).path).name
     return name if name and "." in name else ""
+
+
+def _ensure_attachment_download_filename(attachment: MessageAttachment) -> None:
+    if "." in PurePath(attachment.original_file_name).name:
+        return
+    extension = _extension_for_content_type(attachment.mime_type)
+    if not extension:
+        return
+    attachment.original_file_name = f"{attachment.original_file_name or 'Вложение MAX'}{extension}"
+    attachment.save(update_fields=["original_file_name"])
+
+
+def _download_file_name(
+    *,
+    attachment: MessageAttachment,
+    remote_url: str,
+    content_type: str,
+    content_disposition: str,
+) -> str:
+    content_disposition_name = _filename_from_content_disposition(content_disposition)
+    url_name = _filename_from_url(remote_url)
+    base_name = content_disposition_name or attachment.original_file_name or url_name or f"max-attachment-{attachment.id}"
+    if "." in PurePath(base_name).name:
+        return base_name
+    extension = _extension_for_content_type(content_type)
+    return f"{base_name}{extension}" if extension else base_name
+
+
+def _filename_from_content_disposition(value: str) -> str:
+    if not value:
+        return ""
+    message = EmailMessage()
+    message["content-disposition"] = value
+    filename = message.get_filename()
+    return filename or ""
+
+
+def _extension_for_content_type(content_type: str) -> str:
+    if not content_type or content_type == "application/octet-stream":
+        return ""
+    return mimetypes.guess_extension(content_type) or ""

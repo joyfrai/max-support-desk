@@ -209,6 +209,7 @@ def test_incoming_attachment_with_max_url_is_downloaded_on_first_staff_click(
     ]
     attachment.refresh_from_db()
     assert attachment.stored_file
+    assert attachment.original_file_name == "invoice.pdf"
     assert attachment.size_bytes == len(b"pdf bytes")
     assert attachment.sha256 == hashlib.sha256(b"pdf bytes").hexdigest()
     assert ManagerActionLog.objects.filter(action="attachment.download", message=message).exists()
@@ -251,3 +252,87 @@ def test_incoming_attachment_download_blocks_private_network_urls(
 
     assert response.status_code == 404
     assert http_calls == []
+
+
+@pytest.mark.django_db
+def test_incoming_attachment_download_adds_extension_from_content_type(
+    client,
+    staff_user,
+    conversation,
+    contact,
+    tmp_path,
+    settings,
+    monkeypatch,
+) -> None:
+    settings.MEDIA_ROOT = tmp_path
+    message = Message.objects.create(
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        text="",
+    )
+    attachment = MessageAttachment.objects.create(
+        message=message,
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        attachment_type=MessageAttachment.AttachmentType.IMAGE,
+        original_file_name="Изображение MAX",
+        max_payload={"url": "https://i.oneme.ru/i?r=token"},
+    )
+
+    class FakeResponse:
+        status_code = 200
+        content = b"webp bytes"
+        headers = {"content-type": "image/webp"}
+        is_redirect = False
+
+    monkeypatch.setattr("support.views_api._host_resolves_to_public_ips", lambda hostname: True)
+    monkeypatch.setattr("support.views_api.httpx.get", lambda *args, **kwargs: FakeResponse())
+    client.force_login(staff_user)
+
+    response = client.get(attachment_to_dict(attachment)["download_url"])
+
+    assert response.status_code == 200
+    attachment.refresh_from_db()
+    assert attachment.original_file_name == "Изображение MAX.webp"
+    assert response["Content-Disposition"].endswith('filename*=utf-8\'\'%D0%98%D0%B7%D0%BE%D0%B1%D1%80%D0%B0%D0%B6%D0%B5%D0%BD%D0%B8%D0%B5%20MAX.webp')
+
+
+@pytest.mark.django_db
+def test_existing_stored_attachment_download_adds_missing_extension(
+    client,
+    staff_user,
+    conversation,
+    contact,
+    tmp_path,
+    settings,
+) -> None:
+    settings.MEDIA_ROOT = tmp_path
+    message = Message.objects.create(
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        text="",
+    )
+    attachment = MessageAttachment.objects.create(
+        message=message,
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        attachment_type=MessageAttachment.AttachmentType.IMAGE,
+        original_file_name="Изображение MAX",
+        mime_type="image/webp",
+    )
+    attachment.stored_file.save("Изображение_MAX", SimpleUploadedFile("Изображение_MAX", b"webp", "image/webp"))
+    client.force_login(staff_user)
+
+    response = client.get(reverse("api_attachment_download", args=[attachment.id]))
+
+    assert response.status_code == 200
+    attachment.refresh_from_db()
+    assert attachment.original_file_name == "Изображение MAX.webp"

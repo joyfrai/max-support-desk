@@ -21,6 +21,14 @@ const MOBILE_MEDIA_QUERY = "(max-width: 576px)";
 
 type MobilePane = "chats" | "chat";
 
+type SupportRealtimeEvent = {
+  event: "message.created" | "message.status_changed";
+  payload: {
+    conversation_id?: number;
+    message_id?: number;
+  };
+};
+
 function contactDisplayName(conversation: Conversation): string {
   const contact = conversation.contact;
   const fullName = [contact.last_name, contact.first_name].filter(Boolean).join(" ");
@@ -118,6 +126,7 @@ export function SupportDeskApp() {
   const nextOffsetRef = useRef(0);
   const conversationRequestIdRef = useRef(0);
   const conversationReachEndLockedRef = useRef(false);
+  const activeIdRef = useRef<number | null>(activeId);
 
   const activeConversation = useMemo(
     () => conversations.find((item) => item.id === activeId) || null,
@@ -175,6 +184,10 @@ export function SupportDeskApp() {
   }, [search]);
 
   useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  useEffect(() => {
     const media = window.matchMedia(MOBILE_MEDIA_QUERY);
     const handleChange = () => setIsCompactMobile(media.matches);
     handleChange();
@@ -191,6 +204,33 @@ export function SupportDeskApp() {
       .then(setMessages)
       .catch((err: Error) => setError(err.message));
   }, [activeId]);
+
+  useEffect(() => {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${window.location.host}/ws/support/`);
+
+    socket.onmessage = (event: MessageEvent<string>) => {
+      let realtimeEvent: SupportRealtimeEvent;
+      try {
+        realtimeEvent = JSON.parse(event.data) as SupportRealtimeEvent;
+      } catch {
+        return;
+      }
+
+      if (!["message.created", "message.status_changed"].includes(realtimeEvent.event)) return;
+
+      void loadConversationPage(activeSearchRef.current, 0, false);
+      const conversationId = realtimeEvent.payload.conversation_id;
+      if (conversationId && conversationId === activeIdRef.current) {
+        loadMessages(conversationId)
+          .then(setMessages)
+          .catch((err: Error) => setError(err.message));
+      }
+    };
+
+    socket.onerror = () => setError("Не удалось подключить живое обновление чата");
+    return () => socket.close();
+  }, []);
 
   useEffect(() => {
     const host = conversationListHostRef.current;

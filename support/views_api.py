@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
-import hashlib
 from functools import wraps
+from pathlib import PurePath
+from urllib.parse import urlparse
 
+import httpx
+from django.conf import settings
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
@@ -213,6 +218,9 @@ def message_retry_api(request: HttpRequest, message_id: int) -> JsonResponse:
 def attachment_download_api(request: HttpRequest, attachment_id: int) -> HttpResponse:
     attachment = get_object_or_404(MessageAttachment.objects.select_related("conversation", "message"), pk=attachment_id)
     if not attachment.stored_file:
+        _store_remote_attachment_file(attachment)
+        attachment.refresh_from_db()
+    if not attachment.stored_file:
         raise Http404("Attachment file is not stored")
     log_manager_action(
         manager=request.user,
@@ -296,3 +304,89 @@ def _attachment_type_for_mime(mime_type: str) -> str:
     if mime_type.startswith("audio/"):
         return MessageAttachment.AttachmentType.AUDIO
     return MessageAttachment.AttachmentType.FILE
+
+
+def _store_remote_attachment_file(attachment: MessageAttachment) -> None:
+    remote_url = _remote_attachment_url(attachment)
+    if not remote_url:
+        return
+
+    parsed = urlparse(remote_url)
+    if parsed.scheme != "https" or not _is_allowed_max_download_host(parsed.hostname or ""):
+        logger.warning("attachment_download_blocked attachment_id=%s host=%s", attachment.id, parsed.hostname)
+        return
+
+    headers = {}
+    if parsed.hostname == "platform-api.max.ru" and settings.MAX_BOT_TOKEN:
+        headers["Authorization"] = settings.MAX_BOT_TOKEN
+
+    response = httpx.get(remote_url, headers=headers, follow_redirects=True, timeout=120.0)
+    if response.status_code >= 400:
+        logger.warning(
+            "attachment_download_failed attachment_id=%s status_code=%s",
+            attachment.id,
+            response.status_code,
+        )
+        return
+
+    data = response.content
+    if not data:
+        logger.warning("attachment_download_empty attachment_id=%s", attachment.id)
+        return
+
+    file_name = attachment.original_file_name or _filename_from_url(remote_url) or f"max-attachment-{attachment.id}"
+    content_type = response.headers.get("content-type", "").split(";", 1)[0] or "application/octet-stream"
+
+    attachment.stored_file.save(file_name, ContentFile(data), save=False)
+    attachment.original_file_name = file_name
+    attachment.mime_type = attachment.mime_type or content_type
+    attachment.size_bytes = len(data)
+    attachment.sha256 = hashlib.sha256(data).hexdigest()
+    attachment.uploaded_at = timezone.now()
+    attachment.save(
+        update_fields=[
+            "stored_file",
+            "original_file_name",
+            "mime_type",
+            "size_bytes",
+            "sha256",
+            "uploaded_at",
+        ]
+    )
+
+
+def _remote_attachment_url(attachment: MessageAttachment) -> str:
+    for payload in (attachment.max_payload, attachment.raw_attachment):
+        found = _find_url_in_payload(payload)
+        if found:
+            return found
+    return ""
+
+
+def _find_url_in_payload(payload) -> str:
+    if isinstance(payload, dict):
+        for key in ("download_url", "file_url", "media_url", "url", "link"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.startswith("https://"):
+                return value
+        for value in payload.values():
+            found = _find_url_in_payload(value)
+            if found:
+                return found
+    if isinstance(payload, list):
+        for value in payload:
+            found = _find_url_in_payload(value)
+            if found:
+                return found
+    return ""
+
+
+def _is_allowed_max_download_host(hostname: str) -> bool:
+    return hostname in {"platform-api.max.ru", "max.ru", "okcdn.ru"} or hostname.endswith(
+        (".max.ru", ".okcdn.ru")
+    )
+
+
+def _filename_from_url(url: str) -> str:
+    name = PurePath(urlparse(url).path).name
+    return name if name and "." in name else ""

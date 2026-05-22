@@ -139,3 +139,74 @@ def test_incoming_attachment_without_stored_file_has_non_empty_display_name(conv
 
     assert payload["file_name"] == "Вложение MAX"
     assert payload["download_url"] == ""
+
+
+@pytest.mark.django_db
+def test_incoming_attachment_with_max_url_is_downloaded_on_first_staff_click(
+    client,
+    staff_user,
+    conversation,
+    contact,
+    tmp_path,
+    settings,
+    monkeypatch,
+) -> None:
+    settings.MEDIA_ROOT = tmp_path
+    message = Message.objects.create(
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        text="",
+    )
+    attachment = MessageAttachment.objects.create(
+        message=message,
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        attachment_type=MessageAttachment.AttachmentType.FILE,
+        original_file_name="invoice.pdf",
+        max_payload={"url": "https://files.max.ru/invoice.pdf"},
+    )
+
+    class FakeResponse:
+        status_code = 200
+        content = b"pdf bytes"
+        headers = {"content-type": "application/pdf"}
+
+    http_calls = []
+
+    def fake_get(url, *, headers, follow_redirects, timeout):
+        http_calls.append(
+            {
+                "url": url,
+                "headers": headers,
+                "follow_redirects": follow_redirects,
+                "timeout": timeout,
+            }
+        )
+        return FakeResponse()
+
+    monkeypatch.setattr("support.views_api.httpx.get", fake_get)
+    client.force_login(staff_user)
+
+    payload = attachment_to_dict(attachment)
+    response = client.get(payload["download_url"])
+
+    assert response.status_code == 200
+    assert b"".join(response.streaming_content) == b"pdf bytes"
+    assert response["Content-Type"] == "application/pdf"
+    assert http_calls == [
+        {
+            "url": "https://files.max.ru/invoice.pdf",
+            "headers": {},
+            "follow_redirects": True,
+            "timeout": 120.0,
+        }
+    ]
+    attachment.refresh_from_db()
+    assert attachment.stored_file
+    assert attachment.size_bytes == len(b"pdf bytes")
+    assert attachment.sha256 == hashlib.sha256(b"pdf bytes").hexdigest()
+    assert ManagerActionLog.objects.filter(action="attachment.download", message=message).exists()

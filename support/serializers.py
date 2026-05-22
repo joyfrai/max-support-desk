@@ -37,12 +37,13 @@ def author_display(message: Message) -> str:
 
 def attachment_to_dict(attachment: MessageAttachment) -> dict:
     file_name = attachment.original_file_name or attachment.stored_file.name.rsplit("/", 1)[-1] or "Вложение MAX"
+    can_download = bool(attachment.stored_file) or _has_remote_attachment_url(attachment)
     return {
         "id": attachment.id,
         "file_name": file_name,
         "mime_type": attachment.mime_type,
         "size_bytes": attachment.size_bytes,
-        "download_url": reverse("api_attachment_download", args=[attachment.id]) if attachment.stored_file else "",
+        "download_url": reverse("api_attachment_download", args=[attachment.id]) if can_download else "",
     }
 
 
@@ -82,3 +83,25 @@ def conversation_to_dict(conversation: Conversation) -> dict:
         "last_message_at": conversation.last_message_at.isoformat() if conversation.last_message_at else None,
         "unread_count": conversation.unread_count,
     }
+
+
+def _has_remote_attachment_url(attachment: MessageAttachment) -> bool:
+    return bool(_find_remote_url(attachment.max_payload) or _find_remote_url(attachment.raw_attachment))
+
+
+def _find_remote_url(payload) -> str:
+    if isinstance(payload, dict):
+        for key in ("download_url", "file_url", "media_url", "url", "link"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.startswith("https://"):
+                return value
+        for value in payload.values():
+            found = _find_remote_url(value)
+            if found:
+                return found
+    if isinstance(payload, list):
+        for value in payload:
+            found = _find_remote_url(value)
+            if found:
+                return found
+    return ""

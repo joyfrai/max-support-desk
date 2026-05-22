@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import logging
+import socket
 from functools import wraps
 from pathlib import PurePath
 from urllib.parse import urlparse
@@ -311,16 +313,9 @@ def _store_remote_attachment_file(attachment: MessageAttachment) -> None:
     if not remote_url:
         return
 
-    parsed = urlparse(remote_url)
-    if parsed.scheme != "https" or not _is_allowed_max_download_host(parsed.hostname or ""):
-        logger.warning("attachment_download_blocked attachment_id=%s host=%s", attachment.id, parsed.hostname)
+    response = _get_safe_remote_attachment(remote_url=remote_url, attachment_id=attachment.id)
+    if response is None:
         return
-
-    headers = {}
-    if parsed.hostname == "platform-api.max.ru" and settings.MAX_BOT_TOKEN:
-        headers["Authorization"] = settings.MAX_BOT_TOKEN
-
-    response = httpx.get(remote_url, headers=headers, follow_redirects=True, timeout=120.0)
     if response.status_code >= 400:
         logger.warning(
             "attachment_download_failed attachment_id=%s status_code=%s",
@@ -381,10 +376,55 @@ def _find_url_in_payload(payload) -> str:
     return ""
 
 
-def _is_allowed_max_download_host(hostname: str) -> bool:
-    return hostname in {"platform-api.max.ru", "max.ru", "okcdn.ru"} or hostname.endswith(
-        (".max.ru", ".okcdn.ru")
-    )
+def _get_safe_remote_attachment(*, remote_url: str, attachment_id: int) -> httpx.Response | None:
+    current_url = remote_url
+    for _ in range(4):
+        parsed = urlparse(current_url)
+        if not _is_safe_remote_download_url(current_url):
+            logger.warning("attachment_download_blocked attachment_id=%s host=%s", attachment_id, parsed.hostname)
+            return None
+
+        headers = {}
+        if parsed.hostname == "platform-api.max.ru" and settings.MAX_BOT_TOKEN:
+            headers["Authorization"] = settings.MAX_BOT_TOKEN
+
+        response = httpx.get(current_url, headers=headers, follow_redirects=False, timeout=120.0)
+        if response.is_redirect:
+            redirect_url = response.headers.get("location", "")
+            if not redirect_url:
+                return response
+            current_url = str(httpx.URL(current_url).join(redirect_url))
+            continue
+        return response
+    logger.warning("attachment_download_too_many_redirects attachment_id=%s", attachment_id)
+    return None
+
+
+def _is_safe_remote_download_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        return False
+    if parsed.username or parsed.password:
+        return False
+    return _host_resolves_to_public_ips(parsed.hostname)
+
+
+def _host_resolves_to_public_ips(hostname: str) -> bool:
+    try:
+        addresses = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+    except OSError:
+        return False
+    if not addresses:
+        return False
+    for address in addresses:
+        ip_value = address[4][0]
+        try:
+            ip_address = ipaddress.ip_address(ip_value)
+        except ValueError:
+            return False
+        if not ip_address.is_global:
+            return False
+    return True
 
 
 def _filename_from_url(url: str) -> str:

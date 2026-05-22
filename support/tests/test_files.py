@@ -174,6 +174,7 @@ def test_incoming_attachment_with_max_url_is_downloaded_on_first_staff_click(
         status_code = 200
         content = b"pdf bytes"
         headers = {"content-type": "application/pdf"}
+        is_redirect = False
 
     http_calls = []
 
@@ -188,6 +189,7 @@ def test_incoming_attachment_with_max_url_is_downloaded_on_first_staff_click(
         )
         return FakeResponse()
 
+    monkeypatch.setattr("support.views_api._host_resolves_to_public_ips", lambda hostname: True)
     monkeypatch.setattr("support.views_api.httpx.get", fake_get)
     client.force_login(staff_user)
 
@@ -201,7 +203,7 @@ def test_incoming_attachment_with_max_url_is_downloaded_on_first_staff_click(
         {
             "url": "https://files.max.ru/invoice.pdf",
             "headers": {},
-            "follow_redirects": True,
+            "follow_redirects": False,
             "timeout": 120.0,
         }
     ]
@@ -210,3 +212,42 @@ def test_incoming_attachment_with_max_url_is_downloaded_on_first_staff_click(
     assert attachment.size_bytes == len(b"pdf bytes")
     assert attachment.sha256 == hashlib.sha256(b"pdf bytes").hexdigest()
     assert ManagerActionLog.objects.filter(action="attachment.download", message=message).exists()
+
+
+@pytest.mark.django_db
+def test_incoming_attachment_download_blocks_private_network_urls(
+    client,
+    staff_user,
+    conversation,
+    contact,
+    tmp_path,
+    settings,
+    monkeypatch,
+) -> None:
+    settings.MEDIA_ROOT = tmp_path
+    message = Message.objects.create(
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        text="",
+    )
+    attachment = MessageAttachment.objects.create(
+        message=message,
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        attachment_type=MessageAttachment.AttachmentType.FILE,
+        original_file_name="private.txt",
+        max_payload={"url": "https://127.0.0.1/private.txt"},
+    )
+
+    http_calls = []
+    monkeypatch.setattr("support.views_api.httpx.get", lambda *args, **kwargs: http_calls.append(args))
+    client.force_login(staff_user)
+
+    response = client.get(attachment_to_dict(attachment)["download_url"])
+
+    assert response.status_code == 404
+    assert http_calls == []

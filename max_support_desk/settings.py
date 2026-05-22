@@ -226,16 +226,32 @@ LOGGING = {
             "format": "ts=%(asctime)s level=%(levelname)s logger=%(name)s event=%(message)s",
         },
     },
+    "filters": {
+        "redact_secrets": {
+            "()": "support.logging_filters.SecretRedactingFilter",
+        },
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "structured",
+            "filters": ["redact_secrets"],
         },
     },
     "loggers": {
         "support": {
             "handlers": ["console"],
             "level": os.getenv("SUPPORT_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "httpx": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "httpcore": {
+            "handlers": ["console"],
+            "level": "WARNING",
             "propagate": False,
         },
     },

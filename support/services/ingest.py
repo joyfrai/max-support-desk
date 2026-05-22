@@ -123,15 +123,7 @@ def _process_message_created(raw_update: RawUpdate, payload: dict[str, Any]) -> 
         },
     )
 
-    conversation, _ = Conversation.objects.get_or_create(
-        contact=contact,
-        status__in=[Conversation.Status.NEW, Conversation.Status.OPEN, Conversation.Status.PENDING],
-        defaults={
-            "max_chat_id": get_chat_id(payload),
-            "recipient_type": Conversation.RecipientType.CHAT if get_chat_id(payload) else Conversation.RecipientType.USER,
-            "status": Conversation.Status.OPEN,
-        },
-    )
+    conversation = _get_or_create_active_conversation(contact=contact, payload=payload)
     if conversation.status == Conversation.Status.NEW:
         conversation.status = Conversation.Status.OPEN
 
@@ -172,6 +164,25 @@ def _process_message_created(raw_update: RawUpdate, payload: dict[str, Any]) -> 
     conversation.unread_count = conversation.unread_count + 1
     conversation.save(update_fields=["status", "last_message", "last_message_at", "unread_count", "updated_at"])
     return message
+
+
+def _get_or_create_active_conversation(*, contact: MaxContact, payload: dict[str, Any]) -> Conversation:
+    active_statuses = [Conversation.Status.NEW, Conversation.Status.OPEN, Conversation.Status.PENDING]
+    conversation = (
+        Conversation.objects.filter(contact=contact, status__in=active_statuses)
+        .order_by("id")
+        .first()
+    )
+    if conversation is not None:
+        return conversation
+
+    chat_id = get_chat_id(payload)
+    return Conversation.objects.create(
+        contact=contact,
+        max_chat_id=chat_id,
+        recipient_type=Conversation.RecipientType.CHAT if chat_id else Conversation.RecipientType.USER,
+        status=Conversation.Status.OPEN,
+    )
 
 
 def _content_type_for_message(message: dict[str, Any]) -> str:

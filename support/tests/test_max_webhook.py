@@ -128,3 +128,21 @@ def test_max_webhook_duplicate_dedupe_key_does_not_duplicate_message(client) -> 
     assert Message.objects.count() == 1
     assert Conversation.objects.count() == 1
     assert MaxContact.objects.count() == 1
+
+
+@pytest.mark.django_db
+@override_settings(MAX_WEBHOOK_SECRET="secret")
+def test_max_webhook_uses_existing_active_conversation_when_duplicates_exist(client) -> None:
+    contact = MaxContact.objects.create(max_user_id="1001", username="alex_client")
+    first = Conversation.objects.create(contact=contact, status=Conversation.Status.OPEN, max_chat_id="555")
+    Conversation.objects.create(contact=contact, status=Conversation.Status.PENDING, max_chat_id="555")
+
+    response = client.post(
+        reverse("max_webhook"),
+        data=max_message_created_payload(),
+        content_type="application/json",
+        HTTP_X_MAX_BOT_API_SECRET="secret",
+    )
+
+    assert response.status_code == 200
+    assert Message.objects.get().conversation == first

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone
 
 from support.max_payloads import (
@@ -159,11 +160,24 @@ def _process_message_created(raw_update: RawUpdate, payload: dict[str, Any]) -> 
             raw_attachment=attachment,
         )
 
-    conversation.last_message = message
-    conversation.last_message_at = message.provider_created_at or message.created_at
-    conversation.unread_count = conversation.unread_count + 1
-    conversation.save(update_fields=["status", "last_message", "last_message_at", "unread_count", "updated_at"])
+    _update_conversation_after_incoming_message(conversation=conversation, message=message)
     return message
+
+
+def _update_conversation_after_incoming_message(*, conversation: Conversation, message: Message) -> None:
+    update_values = {
+        "last_message": message,
+        "last_message_at": message.provider_created_at or message.created_at,
+        "unread_count": F("unread_count") + 1,
+        "updated_at": timezone.now(),
+    }
+    if conversation.status == Conversation.Status.NEW:
+        update_values["status"] = Conversation.Status.OPEN
+
+    Conversation.objects.filter(pk=conversation.pk).update(**update_values)
+    conversation.refresh_from_db(
+        fields=["status", "last_message", "last_message_at", "unread_count", "updated_at"]
+    )
 
 
 def _get_or_create_active_conversation(*, contact: MaxContact, payload: dict[str, Any]) -> Conversation:

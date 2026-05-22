@@ -5,6 +5,7 @@ from django.test import override_settings
 from django.urls import reverse
 
 from support.models import Conversation, MaxContact, Message, RawUpdate
+from support.services.ingest import _update_conversation_after_incoming_message
 
 
 def max_message_created_payload() -> dict:
@@ -146,3 +147,23 @@ def test_max_webhook_uses_existing_active_conversation_when_duplicates_exist(cli
 
     assert response.status_code == 200
     assert Message.objects.get().conversation == first
+
+
+@pytest.mark.django_db
+def test_incoming_message_update_increments_unread_count_from_database_value() -> None:
+    contact = MaxContact.objects.create(max_user_id="1001", username="alex_client")
+    conversation = Conversation.objects.create(contact=contact, status=Conversation.Status.OPEN, unread_count=3)
+    stale_conversation = Conversation.objects.get(pk=conversation.pk)
+    Conversation.objects.filter(pk=conversation.pk).update(unread_count=7)
+    message = Message.objects.create(
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        text="Need help",
+    )
+
+    _update_conversation_after_incoming_message(conversation=stale_conversation, message=message)
+
+    conversation.refresh_from_db()
+    assert conversation.unread_count == 8

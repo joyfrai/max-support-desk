@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from django.db import connection, transaction
 from django.utils import timezone
@@ -10,6 +11,9 @@ from support.models import DeliveryAttempt, Message, MessageAttachment
 from support.realtime import message_status_payload, publish_event
 
 logger = logging.getLogger("support.worker")
+
+MAX_ATTACHMENT_NOT_READY_ATTEMPTS = 15
+MAX_ATTACHMENT_NOT_READY_DELAY_SECONDS = 10.0
 
 
 def _queued_outgoing_messages_for_claim(*, skip_locked: bool):
@@ -55,9 +59,9 @@ def process_next_queued_message(*, max_client: MaxClient | None = None) -> Messa
         if not message.conversation.max_chat_id:
             raise ValueError("Conversation has no max_chat_id")
         attachments = _upload_message_attachments(message=message, max_client=max_client)
-        response_payload = max_client.send_message(
-            chat_id=message.conversation.max_chat_id,
-            text=message.text,
+        response_payload = _send_message_with_retries(
+            max_client=max_client,
+            message=message,
             attachments=attachments,
         )
     except Exception as exc:
@@ -143,6 +147,33 @@ def _max_attachment_kind(attachment: MessageAttachment) -> str:
     }:
         return str(attachment.attachment_type)
     return MessageAttachment.AttachmentType.FILE
+
+
+def _send_message_with_retries(*, max_client: MaxClient, message: Message, attachments: list[dict]) -> dict:
+    for attempt in range(MAX_ATTACHMENT_NOT_READY_ATTEMPTS):
+        try:
+            return max_client.send_message(
+                chat_id=message.conversation.max_chat_id,
+                text=message.text,
+                attachments=attachments,
+            )
+        except MaxApiError as exc:
+            if _is_attachment_not_ready(exc) and attempt < MAX_ATTACHMENT_NOT_READY_ATTEMPTS - 1:
+                logger.warning(
+                    "worker_attachment_not_ready message_id=%s retry=%s/%s delay_seconds=%s",
+                    message.id,
+                    attempt + 1,
+                    MAX_ATTACHMENT_NOT_READY_ATTEMPTS,
+                    MAX_ATTACHMENT_NOT_READY_DELAY_SECONDS,
+                )
+                time.sleep(MAX_ATTACHMENT_NOT_READY_DELAY_SECONDS)
+                continue
+            raise
+    return {}
+
+
+def _is_attachment_not_ready(exc: MaxApiError) -> bool:
+    return "attachment.not.ready" in str(exc.body)
 
 
 def _mark_failed(*, message: Message, attempt: DeliveryAttempt, exc: Exception) -> None:

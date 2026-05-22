@@ -4,6 +4,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 
+from support.max_client import MaxApiError
 from support.models import Conversation, DeliveryAttempt, MaxContact, Message, MessageAttachment
 from support.services.outbound import _queued_outgoing_messages_for_claim, process_next_queued_message
 
@@ -30,6 +31,18 @@ class FakeMaxClient:
         self.sent.append({"chat_id": chat_id, "text": text, "attachments": attachments or []})
         if self.error:
             raise self.error
+        return self.response
+
+
+class AttachmentNotReadyThenSuccessClient(FakeMaxClient):
+    def __init__(self, *, failures: int) -> None:
+        super().__init__(response={"message_id": "max-after-retry"})
+        self.failures = failures
+
+    def send_message(self, *, chat_id: str, text: str, attachments: list[dict] | None = None) -> dict:
+        self.sent.append({"chat_id": chat_id, "text": text, "attachments": attachments or []})
+        if len(self.sent) <= self.failures:
+            raise MaxApiError(400, '{"code":"attachment.not.ready"}')
         return self.response
 
 
@@ -151,6 +164,58 @@ def test_process_next_queued_message_uploads_attachments_before_sending(
     assert attachment.max_payload == {"type": "file", "payload": {"token": "uploaded-report.txt"}}
     assert attachment.uploaded_at is not None
     assert attempt.request_payload["attachments_count"] == 1
+
+
+@pytest.mark.django_db
+def test_process_next_queued_message_retries_when_max_attachment_is_not_ready(
+    conversation,
+    contact,
+    manager,
+    monkeypatch,
+) -> None:
+    message = queued_message(conversation, contact, manager, "file attached")
+    MessageAttachment.objects.create(
+        message=message,
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.OUTGOING,
+        sender_kind=Message.SenderKind.MANAGER,
+        manager=manager,
+        attachment_type=MessageAttachment.AttachmentType.FILE,
+        original_file_name="report.csv",
+        mime_type="text/csv",
+        upload_status=MessageAttachment.UploadStatus.UPLOADED,
+        max_payload={"type": "file", "payload": {"token": "uploaded-report"}},
+    )
+    sleeps = []
+    monkeypatch.setattr("support.services.outbound.time.sleep", lambda seconds: sleeps.append(seconds))
+    client = AttachmentNotReadyThenSuccessClient(failures=2)
+
+    process_next_queued_message(max_client=client)
+
+    message.refresh_from_db()
+    assert message.send_status == Message.SendStatus.SENT
+    assert message.max_message_id == "max-after-retry"
+    assert sleeps == [10.0, 10.0]
+    assert client.sent == [
+        {
+            "chat_id": "555",
+            "text": "file attached",
+            "attachments": [{"type": "file", "payload": {"token": "uploaded-report"}}],
+        },
+        {
+            "chat_id": "555",
+            "text": "file attached",
+            "attachments": [{"type": "file", "payload": {"token": "uploaded-report"}}],
+        },
+        {
+            "chat_id": "555",
+            "text": "file attached",
+            "attachments": [{"type": "file", "payload": {"token": "uploaded-report"}}],
+        },
+    ]
+    attempt = DeliveryAttempt.objects.get(message=message)
+    assert attempt.status == DeliveryAttempt.Status.SUCCESS
 
 
 @pytest.mark.django_db

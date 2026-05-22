@@ -156,6 +156,7 @@ def _process_message_created(raw_update: RawUpdate, payload: dict[str, Any]) -> 
             direction=Message.Direction.INCOMING,
             sender_kind=Message.SenderKind.MAX_USER,
             attachment_type=_normalize_attachment_type(attachment_type),
+            original_file_name=_incoming_attachment_name(attachment_type, payload_data),
             max_payload=payload_data if isinstance(payload_data, dict) else {},
             raw_attachment=attachment,
         )
@@ -212,3 +213,19 @@ def _content_type_for_message(message: dict[str, Any]) -> str:
 def _normalize_attachment_type(value: str) -> str:
     allowed = {choice.value for choice in MessageAttachment.AttachmentType}
     return value if value in allowed else MessageAttachment.AttachmentType.UNKNOWN
+
+
+def _incoming_attachment_name(attachment_type: str, payload_data: Any) -> str:
+    if isinstance(payload_data, dict):
+        for key in ("filename", "file_name", "name", "title"):
+            value = payload_data.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+    display_names = {
+        MessageAttachment.AttachmentType.IMAGE: "Изображение MAX",
+        MessageAttachment.AttachmentType.VIDEO: "Видео MAX",
+        MessageAttachment.AttachmentType.AUDIO: "Аудио MAX",
+        MessageAttachment.AttachmentType.FILE: "Файл MAX",
+    }
+    return display_names.get(_normalize_attachment_type(attachment_type), "Вложение MAX")

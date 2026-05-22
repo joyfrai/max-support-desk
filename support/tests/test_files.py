@@ -8,6 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from support.models import Conversation, ManagerActionLog, MaxContact, Message, MessageAttachment
+from support.serializers import attachment_to_dict
 
 
 @pytest.fixture
@@ -114,3 +115,27 @@ def test_attachment_download_is_staff_protected(client, staff_user, conversation
 
     assert response.status_code == 200
     assert response["Content-Type"] == "text/plain"
+
+
+@pytest.mark.django_db
+def test_incoming_attachment_without_stored_file_has_non_empty_display_name(conversation, contact) -> None:
+    message = Message.objects.create(
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        text="",
+    )
+    attachment = MessageAttachment.objects.create(
+        message=message,
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        attachment_type=MessageAttachment.AttachmentType.FILE,
+    )
+
+    payload = attachment_to_dict(attachment)
+
+    assert payload["file_name"] == "Вложение MAX"
+    assert payload["download_url"] == ""

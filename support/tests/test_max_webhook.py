@@ -4,7 +4,7 @@ import pytest
 from django.test import override_settings
 from django.urls import reverse
 
-from support.models import Conversation, MaxContact, Message, RawUpdate
+from support.models import Conversation, MaxContact, Message, MessageAttachment, RawUpdate
 from support.services.ingest import _update_conversation_after_incoming_message
 
 
@@ -107,9 +107,34 @@ def test_max_webhook_message_created_saves_db_first_entities(
 
     attachment = message.attachments.get()
     assert attachment.attachment_type == "image"
+    assert attachment.original_file_name == "Изображение MAX"
     assert attachment.max_payload == {"photo_id": "p1"}
     assert attachment.raw_attachment["type"] == "image"
     assert notified_message_ids == [message.id]
+
+
+@pytest.mark.django_db
+@override_settings(MAX_WEBHOOK_SECRET="secret")
+def test_max_webhook_incoming_file_attachment_keeps_display_name(client) -> None:
+    payload = max_message_created_payload()
+    payload["message"]["body"]["attachments"] = [
+        {
+            "type": "file",
+            "payload": {"filename": "invoice.pdf", "token": "max-file-token"},
+        }
+    ]
+
+    response = client.post(
+        reverse("max_webhook"),
+        data=payload,
+        content_type="application/json",
+        HTTP_X_MAX_BOT_API_SECRET="secret",
+    )
+
+    assert response.status_code == 200
+    attachment = MessageAttachment.objects.get()
+    assert attachment.attachment_type == MessageAttachment.AttachmentType.FILE
+    assert attachment.original_file_name == "invoice.pdf"
 
 
 @pytest.mark.django_db

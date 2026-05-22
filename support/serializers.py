@@ -36,9 +36,10 @@ def author_display(message: Message) -> str:
 
 
 def attachment_to_dict(attachment: MessageAttachment) -> dict:
+    file_name = attachment.original_file_name or attachment.stored_file.name.rsplit("/", 1)[-1] or "Вложение MAX"
     return {
         "id": attachment.id,
-        "file_name": attachment.original_file_name or attachment.stored_file.name.rsplit("/", 1)[-1],
+        "file_name": file_name,
         "mime_type": attachment.mime_type,
         "size_bytes": attachment.size_bytes,
         "download_url": reverse("api_attachment_download", args=[attachment.id]) if attachment.stored_file else "",

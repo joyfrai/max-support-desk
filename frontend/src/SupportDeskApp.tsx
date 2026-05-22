@@ -26,7 +26,7 @@ function contactDisplayName(conversation: Conversation): string {
   const fullName = [contact.last_name, contact.first_name].filter(Boolean).join(" ");
   if (fullName) return fullName;
   if (contact.username) return `@${contact.username}`;
-  return fullName || `MAX user ${contact.max_user_id}`;
+  return `MAX user ${contact.max_user_id}`;
 }
 
 function contactNickname(conversation: Conversation): string {
@@ -371,7 +371,7 @@ export function SupportDeskApp() {
                     sender: message.author_display,
                     direction: message.direction === "outgoing" ? "outgoing" : "incoming",
                     position: "single",
-                    type: message.attachments.length > 0 ? "custom" : "html",
+                    type: message.attachments.length > 0 ? "custom" : "text",
                     payload: renderMessageContent(message)
                   }}
                 >

@@ -53,7 +53,7 @@ def build_incoming_message_notification(message: Message) -> str:
             "<b>Сообщение:</b>",
             escape(_truncate_message(message_text)),
             "",
-            f'<a href="{escape(admin_link, quote=True)}">Открыть чат в админке Django</a>',
+            f'<a href="{escape(admin_link, quote=True)}">Открыть чат в панели поддержки</a>',
         ]
     )
 

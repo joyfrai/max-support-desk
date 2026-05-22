@@ -95,6 +95,7 @@ def test_notify_new_incoming_message_sends_user_message_and_admin_link(
     assert "@client" in telegram_text
     assert "Нужна помощь &lt;с заказом&gt;" in telegram_text
     assert "https://support.example.com/admin/support/chats/" in telegram_text
+    assert "Django" not in telegram_text
     assert max_calls == [
         {
             "chat_id": "max-channel-1",

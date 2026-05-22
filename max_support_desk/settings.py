@@ -33,6 +33,10 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = os.getenv("DJANGO_CROSS_ORIGIN_OPENER_POLICY
 
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
 MAX_WEBHOOK_SECRET = os.getenv("MAX_WEBHOOK_SECRET", "")
+MAX_NOTIFICATION_CHAT_ID = os.getenv("MAX_NOTIFICATION_CHAT_ID", "")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_NOTIFICATION_CHAT_ID = os.getenv("TELEGRAM_NOTIFICATION_CHAT_ID", "")
+SUPPORT_DESK_PUBLIC_URL = os.getenv("SUPPORT_DESK_PUBLIC_URL", "")
 AUDIT_LOG_RETENTION_DAYS = int(os.getenv("AUDIT_LOG_RETENTION_DAYS", "7"))
 
 INSTALLED_APPS = [
@@ -188,6 +192,7 @@ UNFOLD = {
     "SITE_HEADER": "MAX Support Desk",
     "SITE_URL": None,
     "THEME": None,
+    "STYLES": ["/static/admin-mobile-overrides.css"],
     "SCRIPTS": ["/static/admin-theme-default.js"],
     "SIDEBAR": {
         "show_search": True,

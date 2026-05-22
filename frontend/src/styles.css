@@ -14,6 +14,76 @@
   padding: 8px;
 }
 
+.support-desk-conversation-list-host {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.support-desk-conversation-list-host .cs-conversation-list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.support-desk-file-input {
+  display: none;
+}
+
+.support-desk-attachment-chip {
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  border-radius: 4px;
+  color: #075985;
+  font-size: 12px;
+  max-width: 220px;
+  overflow: hidden;
+  padding: 3px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.support-desk-clear-files {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #b8c2d6;
+  border-radius: 999px;
+  color: #334155;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 16px;
+  height: 24px;
+  justify-content: center;
+  line-height: 1;
+  margin-left: 6px;
+  padding: 0;
+  width: 24px;
+}
+
+.support-desk-message-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.support-desk-message-text + .support-desk-message-attachments {
+  margin-top: 6px;
+}
+
+.support-desk-message-attachments a,
+.support-desk-message-attachments span {
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(14, 165, 233, 0.35);
+  border-radius: 4px;
+  color: #075985;
+  font-size: 12px;
+  max-width: 260px;
+  overflow: hidden;
+  padding: 4px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .support-desk-shell .cs-conversation__unread {
   background-color: #0ea5e9;
 }
@@ -41,4 +111,22 @@
 .support-desk-shell .cs-message.cs-message--incoming .cs-message__footer .cs-message__sender-name,
 .support-desk-shell .cs-message.cs-message--incoming .cs-message__footer .cs-message__sent-time {
   display: block;
+}
+
+@media (max-width: 576px) {
+  .support-desk-shell {
+    height: calc(100dvh - 132px);
+    max-height: calc(100dvh - 132px);
+    min-height: 0;
+  }
+
+  .support-desk-shell .cs-main-container {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .support-desk-shell .cs-sidebar,
+  .support-desk-shell .cs-chat-container {
+    height: 100%;
+  }
 }

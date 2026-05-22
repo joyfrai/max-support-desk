@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from support.max_client import MaxApiError, MaxClient
-from support.models import DeliveryAttempt, Message
+from support.models import DeliveryAttempt, Message, MessageAttachment
 from support.realtime import message_status_payload, publish_event
 
 logger = logging.getLogger("support.worker")
@@ -17,6 +17,7 @@ def process_next_queued_message(*, max_client: MaxClient | None = None) -> Messa
     with transaction.atomic():
         message = (
             Message.objects.select_related("conversation", "contact", "manager")
+            .prefetch_related("attachments")
             .filter(direction=Message.Direction.OUTGOING, send_status=Message.SendStatus.QUEUED)
             .order_by("id")
             .first()
@@ -34,6 +35,7 @@ def process_next_queued_message(*, max_client: MaxClient | None = None) -> Messa
                 "chat_id": message.conversation.max_chat_id,
                 "message_id": message.id,
                 "has_text": bool(message.text),
+                "attachments_count": message.attachments.count(),
             },
         )
 
@@ -47,9 +49,11 @@ def process_next_queued_message(*, max_client: MaxClient | None = None) -> Messa
     try:
         if not message.conversation.max_chat_id:
             raise ValueError("Conversation has no max_chat_id")
+        attachments = _upload_message_attachments(message=message, max_client=max_client)
         response_payload = max_client.send_message(
             chat_id=message.conversation.max_chat_id,
             text=message.text,
+            attachments=attachments,
         )
     except Exception as exc:
         _mark_failed(message=message, attempt=attempt, exc=exc)
@@ -87,6 +91,53 @@ def process_next_queued_message(*, max_client: MaxClient | None = None) -> Messa
 
     logger.info("worker_message_sent message_id=%s max_message_id=%s", message.id, max_message_id)
     return message
+
+
+def _upload_message_attachments(*, message: Message, max_client: MaxClient) -> list[dict]:
+    uploaded: list[dict] = []
+    for attachment in message.attachments.all():
+        if attachment.upload_status == MessageAttachment.UploadStatus.UPLOADED and attachment.max_payload:
+            uploaded.append(attachment.max_payload)
+            continue
+        try:
+            with attachment.stored_file.open("rb") as file_obj:
+                data = file_obj.read()
+            payload = max_client.upload_media(
+                kind=_max_attachment_kind(attachment),
+                data=data,
+                filename=attachment.original_file_name or attachment.stored_file.name.rsplit("/", 1)[-1],
+                content_type=attachment.mime_type or "application/octet-stream",
+            )
+        except Exception as exc:
+            attachment.upload_status = MessageAttachment.UploadStatus.FAILED
+            attachment.last_error_text = str(exc)[:2000]
+            attachment.save(update_fields=["upload_status", "last_error_text"])
+            raise
+
+        attachment.max_payload = payload
+        attachment.upload_status = MessageAttachment.UploadStatus.UPLOADED
+        attachment.uploaded_at = timezone.now()
+        attachment.last_error_text = ""
+        attachment.save(
+            update_fields=[
+                "max_payload",
+                "upload_status",
+                "uploaded_at",
+                "last_error_text",
+            ]
+        )
+        uploaded.append(payload)
+    return uploaded
+
+
+def _max_attachment_kind(attachment: MessageAttachment) -> str:
+    if attachment.attachment_type in {
+        MessageAttachment.AttachmentType.IMAGE,
+        MessageAttachment.AttachmentType.VIDEO,
+        MessageAttachment.AttachmentType.AUDIO,
+    }:
+        return str(attachment.attachment_type)
+    return MessageAttachment.AttachmentType.FILE
 
 
 def _mark_failed(*, message: Message, attempt: DeliveryAttempt, exc: Exception) -> None:

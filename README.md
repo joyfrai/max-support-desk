@@ -43,6 +43,14 @@ MYSQL_PASSWORD=replace-with-db-password
 
 MAX_BOT_TOKEN=replace-with-max-bot-token
 MAX_WEBHOOK_SECRET=replace-with-webhook-secret
+SUPPORT_DESK_PUBLIC_URL=https://support.example.com
+
+# Optional: notifications about new incoming MAX messages.
+# If token/chat IDs are empty, notifications are skipped.
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_NOTIFICATION_CHAT_ID=
+MAX_NOTIFICATION_CHAT_ID=
+
 AUDIT_LOG_RETENTION_DAYS=7
 SUPPORT_LOG_LEVEL=INFO
 ```
@@ -81,6 +89,21 @@ https://support.example.com/admin/
 ```
 
 Менеджеры должны быть Django users с `is_staff=True`. Раздел чатов доступен внутри admin sidebar: `Поддержка -> Чаты`.
+
+## Уведомления о новых сообщениях
+
+При входящем `message_created` приложение может отправить уведомление в Telegram channel и/или MAX chat/channel. Если настройки пустые, отправка просто пропускается.
+
+Настройки:
+
+```bash
+TELEGRAM_BOT_TOKEN=123456:telegram-bot-token
+TELEGRAM_NOTIFICATION_CHAT_ID=-1001234567890
+MAX_NOTIFICATION_CHAT_ID=123456789
+SUPPORT_DESK_PUBLIC_URL=https://support.example.com
+```
+
+В уведомлении будут фамилия/имя пользователя MAX, MAX ID, никнейм, текст сообщения и ссылка на `/admin/support/chats/`.
 
 ## Webhook MAX
 

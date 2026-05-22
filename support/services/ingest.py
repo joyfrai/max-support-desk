@@ -21,6 +21,7 @@ from support.max_payloads import (
 )
 from support.models import Conversation, MaxContact, Message, MessageAttachment, RawUpdate
 from support.realtime import message_created_payload, publish_event
+from support.services.notifications import notify_new_incoming_message
 
 logger = logging.getLogger("support.webhook")
 
@@ -65,6 +66,7 @@ def ingest_max_update(payload: dict[str, Any], *, headers: dict[str, str]) -> In
                 transaction.on_commit(
                     lambda: publish_event("message.created", message_created_payload(message))
                 )
+                transaction.on_commit(lambda: notify_new_incoming_message(message.id))
                 logger.info(
                     "max_webhook_processed update_type=%s raw_update_id=%s message_id=%s",
                     update_type,

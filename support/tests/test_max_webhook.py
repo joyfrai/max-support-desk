@@ -54,13 +54,24 @@ def test_max_webhook_rejects_invalid_secret(client) -> None:
 
 @pytest.mark.django_db
 @override_settings(MAX_WEBHOOK_SECRET="secret")
-def test_max_webhook_message_created_saves_db_first_entities(client) -> None:
-    response = client.post(
-        reverse("max_webhook"),
-        data=max_message_created_payload(),
-        content_type="application/json",
-        HTTP_X_MAX_BOT_API_SECRET="secret",
+def test_max_webhook_message_created_saves_db_first_entities(
+    client,
+    monkeypatch,
+    django_capture_on_commit_callbacks,
+) -> None:
+    notified_message_ids = []
+    monkeypatch.setattr(
+        "support.services.ingest.notify_new_incoming_message",
+        lambda message_id: notified_message_ids.append(message_id),
     )
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = client.post(
+            reverse("max_webhook"),
+            data=max_message_created_payload(),
+            content_type="application/json",
+            HTTP_X_MAX_BOT_API_SECRET="secret",
+        )
 
     assert response.status_code == 200
 
@@ -97,6 +108,7 @@ def test_max_webhook_message_created_saves_db_first_entities(client) -> None:
     assert attachment.attachment_type == "image"
     assert attachment.max_payload == {"photo_id": "p1"}
     assert attachment.raw_attachment["type"] == "image"
+    assert notified_message_ids == [message.id]
 
 
 @pytest.mark.django_db

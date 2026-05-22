@@ -21,6 +21,21 @@ async function requestJson<T>(url: string, options: RequestInit = {}): Promise<T
   return (await response.json()) as T;
 }
 
+async function requestFormJson<T>(url: string, body: FormData): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "X-CSRFToken": csrfToken()
+    },
+    body
+  });
+  if (!response.ok) {
+    throw new Error(`Ошибка запроса: ${response.status}`);
+  }
+  return (await response.json()) as T;
+}
+
 export async function loadConversations(params: {
   offset?: number;
   limit?: number;
@@ -40,7 +55,17 @@ export async function loadMessages(conversationId: number): Promise<Message[]> {
   return payload.messages;
 }
 
-export async function sendMessage(conversationId: number, text: string): Promise<SendMessageResult> {
+export async function sendMessage(
+  conversationId: number,
+  text: string,
+  files: File[] = []
+): Promise<SendMessageResult> {
+  if (files.length > 0) {
+    const form = new FormData();
+    form.set("text", text);
+    files.forEach((file) => form.append("files", file));
+    return requestFormJson<SendMessageResult>(`/api/conversations/${conversationId}/messages/`, form);
+  }
   return requestJson<SendMessageResult>(
     `/api/conversations/${conversationId}/messages/`,
     {

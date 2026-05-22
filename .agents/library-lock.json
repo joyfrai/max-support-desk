@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-21T20:25:31.341584+00:00",
+  "generated_at": "2026-05-22T00:13:52.848158Z",
   "library_root": "/root/projects/ai-library",
   "project_dir": "/root/projects/max-support-desk",
   "skills": [
@@ -187,6 +187,17 @@
       "domains": [],
       "source": "/root/projects/ai-library/sources/mattpocock_skills/skills/engineering/grill-with-docs",
       "destination": "/root/projects/max-support-desk/.agents/skills/grill-with-docs"
+    },
+    {
+      "skill_id": "proflead_codex_skills_library::skills/planning/simple-refactor",
+      "repo_id": "proflead_codex_skills_library",
+      "repo_commit": "7c8c9bed208007531cc50a7df6abb244798daeb7",
+      "trust_tier": "reviewed",
+      "domains": [
+        "planning"
+      ],
+      "source": "/root/projects/ai-library/sources/proflead_codex-skills-library/skills/planning/simple-refactor",
+      "destination": "/root/projects/max-support-desk/.agents/skills/simple-refactor"
     }
   ],
   "agents": [

@@ -46,7 +46,40 @@ def test_manager_can_upload_attachment_with_outgoing_message(client, staff_user,
     assert attachment.size_bytes == len(payload)
     assert attachment.sha256 == hashlib.sha256(payload).hexdigest()
     assert attachment.upload_status == MessageAttachment.UploadStatus.PENDING
+    response_payload = response.json()
+    assert response_payload["message"]["attachments"] == [
+        {
+            "id": attachment.id,
+            "file_name": "hello.txt",
+            "mime_type": "text/plain",
+            "size_bytes": len(payload),
+            "download_url": reverse("api_attachment_download", args=[attachment.id]),
+        }
+    ]
     assert ManagerActionLog.objects.filter(action="attachment.upload", message=message).exists()
+
+
+@pytest.mark.django_db
+def test_manager_can_upload_attachment_without_text(client, staff_user, conversation, tmp_path, settings) -> None:
+    settings.MEDIA_ROOT = tmp_path
+    client.force_login(staff_user)
+    file_payload = b"file only"
+    upload = SimpleUploadedFile("only.txt", file_payload, content_type="text/plain")
+
+    response = client.post(
+        reverse("api_conversation_messages", args=[conversation.id]),
+        data={"file": upload},
+    )
+
+    assert response.status_code == 201
+    message = Message.objects.get(direction=Message.Direction.OUTGOING)
+    attachment = MessageAttachment.objects.get(message=message)
+    assert message.text == ""
+    assert message.content_type == Message.ContentType.FILE
+    assert response.json()["message"]["attachments"][0]["download_url"] == reverse(
+        "api_attachment_download",
+        args=[attachment.id],
+    )
 
 
 @pytest.mark.django_db

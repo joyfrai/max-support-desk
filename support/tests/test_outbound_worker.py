@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 
-from support.models import Conversation, DeliveryAttempt, MaxContact, Message
+from support.models import Conversation, DeliveryAttempt, MaxContact, Message, MessageAttachment
 from support.services.outbound import process_next_queued_message
 
 
@@ -11,10 +12,22 @@ class FakeMaxClient:
     def __init__(self, *, response: dict | None = None, error: Exception | None = None) -> None:
         self.response = response or {"message_id": "max-mid-1"}
         self.error = error
-        self.sent: list[tuple[str, str]] = []
+        self.sent: list[dict] = []
+        self.uploaded: list[dict] = []
 
-    def send_message(self, *, chat_id: str, text: str) -> dict:
-        self.sent.append((chat_id, text))
+    def upload_media(self, *, kind: str, data: bytes, filename: str, content_type: str) -> dict:
+        self.uploaded.append(
+            {
+                "kind": kind,
+                "data": data,
+                "filename": filename,
+                "content_type": content_type,
+            }
+        )
+        return {"type": kind, "payload": {"token": f"uploaded-{filename}"}}
+
+    def send_message(self, *, chat_id: str, text: str, attachments: list[dict] | None = None) -> dict:
+        self.sent.append({"chat_id": chat_id, "text": text, "attachments": attachments or []})
         if self.error:
             raise self.error
         return self.response
@@ -64,7 +77,7 @@ def test_process_next_queued_message_sends_oldest_queued_message(
     processed = process_next_queued_message(max_client=client)
 
     assert processed == first
-    assert client.sent == [("555", "first")]
+    assert client.sent == [{"chat_id": "555", "text": "first", "attachments": []}]
 
 
 @pytest.mark.django_db
@@ -86,6 +99,58 @@ def test_process_next_queued_message_success_marks_sent_and_records_attempt(
     attempt = DeliveryAttempt.objects.get(message=message)
     assert attempt.attempt_no == 1
     assert attempt.status == DeliveryAttempt.Status.SUCCESS
+
+
+@pytest.mark.django_db
+def test_process_next_queued_message_uploads_attachments_before_sending(
+    conversation,
+    contact,
+    manager,
+    tmp_path,
+    settings,
+) -> None:
+    settings.MEDIA_ROOT = tmp_path
+    message = queued_message(conversation, contact, manager, "file attached")
+    attachment = MessageAttachment.objects.create(
+        message=message,
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.OUTGOING,
+        sender_kind=Message.SenderKind.MANAGER,
+        manager=manager,
+        attachment_type=MessageAttachment.AttachmentType.FILE,
+        original_file_name="report.txt",
+        mime_type="text/plain",
+        upload_status=MessageAttachment.UploadStatus.PENDING,
+    )
+    attachment.stored_file.save("report.txt", SimpleUploadedFile("report.txt", b"report", "text/plain"))
+    client = FakeMaxClient(response={"message_id": "max-with-file"})
+
+    process_next_queued_message(max_client=client)
+
+    message.refresh_from_db()
+    attachment.refresh_from_db()
+    attempt = DeliveryAttempt.objects.get(message=message)
+    assert client.uploaded == [
+        {
+            "kind": "file",
+            "data": b"report",
+            "filename": "report.txt",
+            "content_type": "text/plain",
+        }
+    ]
+    assert client.sent == [
+        {
+            "chat_id": "555",
+            "text": "file attached",
+            "attachments": [{"type": "file", "payload": {"token": "uploaded-report.txt"}}],
+        }
+    ]
+    assert message.send_status == Message.SendStatus.SENT
+    assert attachment.upload_status == MessageAttachment.UploadStatus.UPLOADED
+    assert attachment.max_payload == {"type": "file", "payload": {"token": "uploaded-report.txt"}}
+    assert attachment.uploaded_at is not None
+    assert attempt.request_payload["attachments_count"] == 1
 
 
 @pytest.mark.django_db

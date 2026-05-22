@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 
-from support.models import Conversation, MaxContact, Message
+from support.models import Conversation, MaxContact, Message, MessageAttachment
 
 
 def contact_to_dict(contact: MaxContact) -> dict:
@@ -34,6 +35,16 @@ def author_display(message: Message) -> str:
     return "Система"
 
 
+def attachment_to_dict(attachment: MessageAttachment) -> dict:
+    return {
+        "id": attachment.id,
+        "file_name": attachment.original_file_name or attachment.stored_file.name.rsplit("/", 1)[-1],
+        "mime_type": attachment.mime_type,
+        "size_bytes": attachment.size_bytes,
+        "download_url": reverse("api_attachment_download", args=[attachment.id]) if attachment.stored_file else "",
+    }
+
+
 def message_to_dict(message: Message) -> dict:
     return {
         "id": message.id,
@@ -56,6 +67,7 @@ def message_to_dict(message: Message) -> dict:
             if message.direction == Message.Direction.INCOMING and message.provider_created_at
             else message.created_at.isoformat()
         ),
+        "attachments": [attachment_to_dict(attachment) for attachment in message.attachments.all()],
     }
 
 

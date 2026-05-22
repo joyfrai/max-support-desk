@@ -16,9 +16,17 @@ def test_channel_layer_uses_redis_when_redis_url_is_set() -> None:
 
 def test_unfold_uses_theme_switch_with_light_default_script_and_hides_site_link() -> None:
     assert project_settings.UNFOLD["THEME"] is None
+    assert "/static/admin-mobile-overrides.css" in project_settings.UNFOLD["STYLES"]
     assert "/static/admin-theme-default.js" in project_settings.UNFOLD["SCRIPTS"]
     assert project_settings.UNFOLD["SITE_URL"] is None
 
 
 def test_cross_origin_opener_policy_is_configurable() -> None:
     assert hasattr(project_settings, "SECURE_CROSS_ORIGIN_OPENER_POLICY")
+
+
+def test_notification_settings_are_defined() -> None:
+    assert hasattr(project_settings, "TELEGRAM_BOT_TOKEN")
+    assert hasattr(project_settings, "TELEGRAM_NOTIFICATION_CHAT_ID")
+    assert hasattr(project_settings, "MAX_NOTIFICATION_CHAT_ID")
+    assert hasattr(project_settings, "SUPPORT_DESK_PUBLIC_URL")

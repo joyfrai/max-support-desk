@@ -24,6 +24,15 @@ export type Message = {
   text: string;
   send_status: string;
   created_at: string | null;
+  attachments: MessageAttachment[];
+};
+
+export type MessageAttachment = {
+  id: number;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number | null;
+  download_url: string;
 };
 
 export type SendMessageResult = {

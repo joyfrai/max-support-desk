@@ -84,7 +84,11 @@ def conversation_messages_api(request: HttpRequest, conversation_id: int) -> Jso
 
     if request.method == "GET":
         after_id = request.GET.get("after_id")
-        messages = Message.objects.select_related("contact", "manager").filter(conversation=conversation)
+        messages = (
+            Message.objects.select_related("contact", "manager")
+            .prefetch_related("attachments")
+            .filter(conversation=conversation)
+        )
         if after_id and after_id.isdigit():
             messages = messages.filter(id__gt=int(after_id))
         messages = messages.for_display()

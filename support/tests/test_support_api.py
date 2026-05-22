@@ -102,6 +102,19 @@ def test_conversations_api_paginates_by_limit_and_offset(client, staff_user) -> 
 
 
 @pytest.mark.django_db
+def test_conversations_api_empty_page_stops_pagination(client, staff_user) -> None:
+    client.force_login(staff_user)
+
+    response = client.get(reverse("api_conversations"), {"limit": "100", "offset": "100"})
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert payload["conversations"] == []
+    assert payload["next_offset"] == 100
+    assert payload["has_more"] is False
+
+
+@pytest.mark.django_db
 def test_conversations_api_searches_contacts(client, staff_user) -> None:
     target = MaxContact.objects.create(max_user_id="1001", username="ivan_support", first_name="Иван", last_name="Петров")
     other = MaxContact.objects.create(max_user_id="1002", username="maria_max", first_name="Мария", last_name="Смирнова")
@@ -143,6 +156,30 @@ def test_messages_api_orders_by_display_order(client, staff_user, conversation, 
     payload = as_json(response)
     assert [item["id"] for item in payload["messages"]] == [earlier.id, later.id]
     assert payload["messages"][0]["author_display"] == "@client"
+
+
+@pytest.mark.django_db
+def test_messages_api_handles_more_than_1000_messages(client, staff_user, conversation, contact) -> None:
+    messages = [
+        Message(
+            conversation=conversation,
+            contact=contact,
+            direction=Message.Direction.INCOMING,
+            sender_kind=Message.SenderKind.MAX_USER,
+            text=f"message {index}",
+        )
+        for index in range(1005)
+    ]
+    Message.objects.bulk_create(messages)
+    client.force_login(staff_user)
+
+    response = client.get(reverse("api_conversation_messages", args=[conversation.id]))
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert len(payload["messages"]) == 1005
+    assert payload["messages"][0]["text"] == "message 0"
+    assert payload["messages"][-1]["text"] == "message 1004"
 
 
 @pytest.mark.django_db

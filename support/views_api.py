@@ -84,6 +84,8 @@ def conversation_messages_api(request: HttpRequest, conversation_id: int) -> Jso
 
     if request.method == "GET":
         after_id = request.GET.get("after_id")
+        limit = _positive_int(request.GET.get("limit"), default=200, maximum=500)
+        offset_value = request.GET.get("offset")
         messages = (
             Message.objects.select_related("contact", "manager")
             .prefetch_related("attachments")
@@ -92,7 +94,22 @@ def conversation_messages_api(request: HttpRequest, conversation_id: int) -> Jso
         if after_id and after_id.isdigit():
             messages = messages.filter(id__gt=int(after_id))
         messages = messages.for_display()
-        return JsonResponse({"messages": [message_to_dict(item) for item in messages]})
+        total = messages.count()
+        if offset_value is None and not after_id:
+            offset = max(total - limit, 0)
+        else:
+            offset = _positive_int(offset_value, default=0, maximum=1_000_000)
+        page = list(messages[offset : offset + limit])
+        return JsonResponse(
+            {
+                "messages": [message_to_dict(item) for item in page],
+                "offset": offset,
+                "limit": limit,
+                "total": total,
+                "has_more_before": offset > 0,
+                "has_more_after": offset + len(page) < total,
+            }
+        )
 
     payload = parse_json_body(request) if request.content_type == "application/json" else request.POST
     text = str(payload.get("text") or "").strip()

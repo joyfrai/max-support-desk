@@ -177,9 +177,41 @@ def test_messages_api_handles_more_than_1000_messages(client, staff_user, conver
 
     assert response.status_code == 200
     payload = as_json(response)
-    assert len(payload["messages"]) == 1005
-    assert payload["messages"][0]["text"] == "message 0"
+    assert len(payload["messages"]) == 200
+    assert payload["messages"][0]["text"] == "message 805"
     assert payload["messages"][-1]["text"] == "message 1004"
+    assert payload["limit"] == 200
+    assert payload["offset"] == 805
+    assert payload["total"] == 1005
+    assert payload["has_more_before"] is True
+    assert payload["has_more_after"] is False
+
+
+@pytest.mark.django_db
+def test_messages_api_supports_explicit_limit_and_offset(client, staff_user, conversation, contact) -> None:
+    messages = [
+        Message(
+            conversation=conversation,
+            contact=contact,
+            direction=Message.Direction.INCOMING,
+            sender_kind=Message.SenderKind.MAX_USER,
+            text=f"message {index}",
+        )
+        for index in range(5)
+    ]
+    Message.objects.bulk_create(messages)
+    client.force_login(staff_user)
+
+    response = client.get(reverse("api_conversation_messages", args=[conversation.id]), {"limit": "2", "offset": "1"})
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert [item["text"] for item in payload["messages"]] == ["message 1", "message 2"]
+    assert payload["limit"] == 2
+    assert payload["offset"] == 1
+    assert payload["total"] == 5
+    assert payload["has_more_before"] is True
+    assert payload["has_more_after"] is True
 
 
 @pytest.mark.django_db

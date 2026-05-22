@@ -50,7 +50,7 @@ export async function loadConversations(params: {
 
 export async function loadMessages(conversationId: number): Promise<Message[]> {
   const payload = await requestJson<{ messages: Message[] }>(
-    `/api/conversations/${conversationId}/messages/`
+    `/api/conversations/${conversationId}/messages/?limit=200`
   );
   return payload.messages;
 }

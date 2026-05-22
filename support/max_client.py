@@ -58,13 +58,13 @@ class MaxClient:
         meta = self._request("POST", "/uploads", params={"type": kind})
         upload_url = meta.get("url")
         upload_token = meta.get("token")
-        if not upload_url or not upload_token:
-            raise ValueError("MAX upload response does not include url/token")
+        if not upload_url:
+            raise ValueError("MAX upload response does not include url")
 
         self._rate_limit()
         response = httpx.post(
             upload_url,
-            headers={"Authorization": upload_token},
+            headers={"Authorization": self.token},
             files={"data": (filename, data, content_type or "application/octet-stream")},
             timeout=120.0,
         )
@@ -74,6 +74,8 @@ class MaxClient:
         upload_payload = response.json() if response.content else {}
         if kind in {"image", "file"}:
             return {"type": kind, "payload": upload_payload}
+        if not upload_token:
+            raise ValueError("MAX upload response does not include token")
         return {"type": kind, "payload": {"token": upload_token}}
 
     def send_message(self, *, chat_id: str, text: str, attachments: list[dict] | None = None) -> dict:

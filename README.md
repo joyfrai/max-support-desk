@@ -165,11 +165,66 @@ http://127.0.0.1:8066/admin/
 
 ## Проверка после обновлений
 
+Обновить уже развернутый production:
+
+```bash
+cd /var/www/fastuser/data/www/max-support-desk
+
+git status --short
+git pull --ff-only
+
+docker compose build web worker
+docker compose up -d web worker
+```
+
+Если менялись зависимости, frontend или Django settings, rebuild обязателен. Для обычных backend/frontend правок достаточно пересобрать и пересоздать `web` и `worker`; Redis volume трогать не нужно.
+
+Применить миграции и проверить Django:
+
 ```bash
 docker compose exec web python manage.py migrate
 docker compose exec web python manage.py check
-docker compose logs -f web worker
+docker compose exec web python manage.py makemigrations --check --dry-run
 ```
+
+Проверить контейнеры и логи:
+
+```bash
+docker compose ps
+docker compose logs --tail=100 web worker
+docker compose logs --tail=50 redis
+```
+
+Проверить локальные порты внутри сервера:
+
+```bash
+ss -ltnp | grep -E ':8066|:6379|:3306|:80|:443'
+docker compose port redis 6379
+```
+
+Ожидаемо:
+
+- `web` слушает `127.0.0.1:8066`;
+- `redis` доступен только на `127.0.0.1:6379`;
+- `mysql` доступен на `127.0.0.1:3306` или на указанном внешнем MySQL host;
+- наружу открыты только nginx `80/443` для домена.
+
+Проверить HTTP/HTTPS endpoints:
+
+```bash
+curl -I http://127.0.0.1:8066/admin/login/
+curl -I http://127.0.0.1:8066/support/
+curl -I http://127.0.0.1:8066/webhooks/max/
+
+curl -I https://maxdesk.dept.trading/admin/login/
+curl -I https://maxdesk.dept.trading/admin/support/chats/
+```
+
+Ожидаемо:
+
+- `/admin/login/` возвращает `200`;
+- `/support/` может вернуть `302` на `/admin/support/chats/`;
+- GET `/webhooks/max/` возвращает `405`, потому что webhook принимает только `POST`.
 
 Для ручной проверки:
 
@@ -177,3 +232,6 @@ docker compose logs -f web worker
 - `/admin/support/maxcontact/` показывает пользователей MAX только для просмотра.
 - `/admin/support/chats/` открывает Chatscope UI внутри Django admin.
 - `POST /webhooks/max/` принимает webhook только с правильным `X-Max-Bot-Api-Secret`.
+- Новое входящее сообщение MAX появляется в открытом `/admin/support/chats/` без перезагрузки страницы.
+- Входящий файл MAX отображается как вложение; если MAX payload содержит download URL, менеджер может скачать файл по ссылке из чата.
+- Исходящий файл из чата получает статус отправки и доходит в MAX; при ошибке остается доступна кнопка `Повторить`.

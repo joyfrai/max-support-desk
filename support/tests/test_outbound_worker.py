@@ -115,6 +115,33 @@ def test_process_next_queued_message_success_marks_sent_and_records_attempt(
 
 
 @pytest.mark.django_db
+def test_process_next_queued_message_logs_warning_when_max_message_id_is_missing(
+    conversation,
+    contact,
+    manager,
+    monkeypatch,
+) -> None:
+    warning_calls: list[tuple[object, ...]] = []
+
+    def fake_warning(message, *args):
+        warning_calls.append((message, *args))
+
+    monkeypatch.setattr("support.services.outbound.logger.warning", fake_warning)
+    message = queued_message(conversation, contact, manager, "hello")
+    client = FakeMaxClient(response={"success": True, "message": {"status": "accepted"}})
+
+    process_next_queued_message(max_client=client)
+
+    message.refresh_from_db()
+    assert message.send_status == Message.SendStatus.SENT
+    assert message.max_message_id == ""
+    assert warning_calls
+    assert warning_calls[0][0] == "worker_message_sent_without_max_message_id message_id=%s response_shape=%s"
+    assert warning_calls[0][1] == message.id
+    assert warning_calls[0][2] == {"response_keys": ["message", "success"], "nested_keys": {"message": ["status"]}}
+
+
+@pytest.mark.django_db
 def test_process_next_queued_message_uploads_attachments_before_sending(
     conversation,
     contact,

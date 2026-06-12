@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any
 
 from django.db import connection, transaction
 from django.utils import timezone
 
 from support.max_client import MaxApiError, MaxClient
+from support.max_payloads import get_message_id
 from support.models import DeliveryAttempt, Message, MessageAttachment
 from support.realtime import message_status_payload, publish_event
 
@@ -68,12 +70,7 @@ def process_next_queued_message(*, max_client: MaxClient | None = None) -> Messa
         _mark_failed(message=message, attempt=attempt, exc=exc)
         return message
 
-    max_message_id = str(
-        response_payload.get("message_id")
-        or response_payload.get("id")
-        or response_payload.get("message", {}).get("message_id")
-        or ""
-    )
+    max_message_id = _extract_max_message_id(response_payload)
     with transaction.atomic():
         message.send_status = Message.SendStatus.SENT
         message.max_message_id = max_message_id
@@ -98,8 +95,49 @@ def process_next_queued_message(*, max_client: MaxClient | None = None) -> Messa
             lambda: publish_event("message.status_changed", message_status_payload(message))
         )
 
+    if not max_message_id:
+        logger.warning(
+            "worker_message_sent_without_max_message_id message_id=%s response_shape=%s",
+            message.id,
+            _response_shape(response_payload),
+        )
     logger.info("worker_message_sent message_id=%s max_message_id=%s", message.id, max_message_id)
     return message
+
+
+def _extract_max_message_id(response_payload: Any) -> str:
+    if not isinstance(response_payload, dict):
+        return ""
+
+    message_id = get_message_id(response_payload)
+    if message_id:
+        return message_id
+
+    for key in ("message", "result", "data"):
+        nested = response_payload.get(key)
+        if not isinstance(nested, dict):
+            continue
+        nested_message_id = get_message_id(nested)
+        if nested_message_id:
+            return nested_message_id
+
+    return ""
+
+
+def _response_shape(response_payload: Any) -> dict[str, object]:
+    if not isinstance(response_payload, dict):
+        return {"response_type": type(response_payload).__name__}
+
+    nested_keys: dict[str, list[str]] = {}
+    for key in ("message", "result", "data"):
+        nested = response_payload.get(key)
+        if isinstance(nested, dict):
+            nested_keys[key] = sorted(str(item) for item in nested.keys())
+
+    shape: dict[str, object] = {"response_keys": sorted(str(item) for item in response_payload.keys())}
+    if nested_keys:
+        shape["nested_keys"] = nested_keys
+    return shape
 
 
 def _upload_message_attachments(*, message: Message, max_client: MaxClient) -> list[dict]:

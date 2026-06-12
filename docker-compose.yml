@@ -1,6 +1,7 @@
 services:
   web:
     build: .
+    restart: unless-stopped
     network_mode: host
     env_file:
       - path: .env
@@ -16,6 +17,7 @@ services:
 
   worker:
     build: .
+    restart: unless-stopped
     network_mode: host
     env_file:
       - path: .env
@@ -31,6 +33,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
       - "127.0.0.1:6379:6379"

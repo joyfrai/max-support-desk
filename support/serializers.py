@@ -57,12 +57,17 @@ def message_to_dict(message: Message) -> dict:
         "author_kind": message.sender_kind,
         "author_display": author_display(message),
         "manager_id": message.manager_id,
+        "max_message_id": message.max_message_id,
+        "max_sender_user_id": message.max_sender_user_id,
+        "external_event_key": message.external_event_key,
+        "reply_to_message_id": message.reply_to_message_id,
         "text": message.text,
         "text_format": message.text_format,
         "content_type": message.content_type,
         "send_status": message.send_status,
         "provider_created_at": message.provider_created_at.isoformat() if message.provider_created_at else None,
         "created_at": message.created_at.isoformat() if message.created_at else None,
+        "received_at": message.received_at.isoformat() if message.received_at else None,
         "sent_at": message.sent_at.isoformat() if message.sent_at else None,
         "sort_key": (
             message.provider_created_at.isoformat()
@@ -76,12 +81,17 @@ def message_to_dict(message: Message) -> dict:
 def conversation_to_dict(conversation: Conversation) -> dict:
     return {
         "id": conversation.id,
+        "max_chat_id": conversation.max_chat_id,
+        "recipient_type": conversation.recipient_type,
         "contact": contact_to_dict(conversation.contact),
         "status": conversation.status,
         "assigned_to_id": conversation.assigned_to_id,
         "last_message_id": conversation.last_message_id,
         "last_message_at": conversation.last_message_at.isoformat() if conversation.last_message_at else None,
         "unread_count": conversation.unread_count,
+        "closed_at": conversation.closed_at.isoformat() if conversation.closed_at else None,
+        "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
+        "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
     }
 
 

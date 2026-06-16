@@ -130,6 +130,82 @@ def test_conversations_api_searches_contacts(client, staff_user) -> None:
 
 
 @pytest.mark.django_db
+def test_external_conversations_api_requires_bearer_token(client, conversation, settings) -> None:
+    settings.SUPPORT_EXTERNAL_API_TOKEN = "external-secret"
+
+    response = client.get(reverse("external_api_conversations"))
+
+    assert response.status_code == 401
+    assert response["WWW-Authenticate"] == 'Bearer realm="max-support-desk-external-api"'
+    assert as_json(response) == {"ok": False, "error": "unauthorized"}
+
+
+@pytest.mark.django_db
+def test_external_conversations_api_returns_service_unavailable_when_disabled(client, conversation) -> None:
+    response = client.get(reverse("external_api_conversations"))
+
+    assert response.status_code == 503
+    assert as_json(response) == {"ok": False, "error": "external_api_disabled"}
+
+
+@pytest.mark.django_db
+def test_external_conversations_api_returns_conversations_with_token(client, conversation, settings) -> None:
+    settings.SUPPORT_EXTERNAL_API_TOKEN = "external-secret"
+
+    response = client.get(
+        reverse("external_api_conversations"),
+        HTTP_AUTHORIZATION="Bearer external-secret",
+    )
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert payload["conversations"][0]["id"] == conversation.id
+    assert payload["conversations"][0]["max_chat_id"] == conversation.max_chat_id
+    assert payload["conversations"][0]["contact"]["username"] == "client"
+
+
+@pytest.mark.django_db
+def test_external_messages_api_returns_messages_with_token(client, conversation, contact, settings) -> None:
+    settings.SUPPORT_EXTERNAL_API_TOKEN = "external-secret"
+    message = Message.objects.create(
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        text="hello from max",
+        max_message_id="max-42",
+    )
+
+    response = client.get(
+        reverse("external_api_conversation_messages", args=[conversation.id]),
+        HTTP_AUTHORIZATION="Bearer external-secret",
+    )
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert payload["conversation"]["id"] == conversation.id
+    assert payload["messages"][0]["id"] == message.id
+    assert payload["messages"][0]["max_message_id"] == "max-42"
+    assert payload["messages"][0]["text"] == "hello from max"
+
+
+@pytest.mark.django_db
+def test_external_openapi_schema_lists_external_routes(client, settings) -> None:
+    settings.SUPPORT_DESK_PUBLIC_URL = "https://support.example.com"
+
+    response = client.get(reverse("external_api_openapi"))
+
+    assert response.status_code == 200
+    assert response["Content-Type"].startswith("application/vnd.oai.openapi+json")
+    payload = as_json(response)
+    assert payload["openapi"] == "3.0.3"
+    assert payload["servers"] == [{"url": "https://support.example.com"}]
+    assert "/api/external/conversations/" in payload["paths"]
+    assert "/api/external/conversations/{conversation_id}/messages/" in payload["paths"]
+    assert payload["components"]["securitySchemes"]["BearerAuth"]["scheme"] == "bearer"
+
+
+@pytest.mark.django_db
 def test_messages_api_orders_by_display_order(client, staff_user, conversation, contact) -> None:
     now = timezone.now()
     later = Message.objects.create(

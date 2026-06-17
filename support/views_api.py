@@ -171,9 +171,18 @@ def conversation_messages_api(request: HttpRequest, conversation_id: int) -> Jso
 @external_api_bearer_required
 def external_conversations_api(request: HttpRequest) -> JsonResponse:
     limit = _positive_int(request.GET.get("limit"), default=100, maximum=100)
-    offset = _positive_int(request.GET.get("offset"), default=0, maximum=100_000)
+    from_value = _pagination_from(request, default=0, maximum=100_000)
     search = (request.GET.get("search") or "").strip()
-    return JsonResponse(_conversations_payload(limit=limit, offset=offset, search=search))
+    sort = _parse_sort(request.GET.get("sort"), default="desc")
+    return JsonResponse(
+        _conversations_payload(
+            limit=limit,
+            offset=from_value,
+            search=search,
+            sort=sort,
+            include_from_alias=True,
+        )
+    )
 
 
 @require_GET
@@ -184,14 +193,18 @@ def external_conversation_messages_api(request: HttpRequest, conversation_id: in
         pk=conversation_id,
     )
     after_id = request.GET.get("after_id")
-    limit = _positive_int(request.GET.get("limit"), default=200, maximum=500)
-    offset_value = request.GET.get("offset")
+    limit = _positive_int(request.GET.get("limit"), default=100, maximum=500)
+    from_value = _pagination_from(request, default=0, maximum=1_000_000)
+    sort = _parse_sort(request.GET.get("sort"), default="desc")
     return JsonResponse(
         _conversation_messages_payload(
             conversation=conversation,
             limit=limit,
-            offset_value=offset_value,
+            offset_value=str(from_value),
             after_id=after_id,
+            sort=sort,
+            default_latest_window=False,
+            include_from_alias=True,
         )
     )
 
@@ -294,11 +307,34 @@ def _extract_bearer_token(header_value: str) -> str:
     return token.strip()
 
 
-def _conversations_payload(*, limit: int, offset: int, search: str) -> dict:
+def _parse_sort(value: str | None, *, default: str) -> str:
+    if value and value.lower() in {"asc", "desc"}:
+        return value.lower()
+    return default
+
+
+def _pagination_from(request: HttpRequest, *, default: int, maximum: int) -> int:
+    raw_value = request.GET.get("from")
+    if raw_value is None:
+        raw_value = request.GET.get("offset")
+    return _positive_int(raw_value, default=default, maximum=maximum)
+
+
+def _conversations_payload(
+    *,
+    limit: int,
+    offset: int,
+    search: str,
+    sort: str = "desc",
+    include_from_alias: bool = False,
+) -> dict:
+    ordering = ["-last_message_at", "-updated_at", "id"]
+    if sort == "asc":
+        ordering = ["last_message_at", "updated_at", "id"]
     conversations = (
         Conversation.objects.select_related("contact", "assigned_to", "last_message")
         .all()
-        .order_by("-last_message_at", "-updated_at", "id")
+        .order_by(*ordering)
     )
     if search:
         conversations = _filter_conversations(conversations, search)
@@ -306,13 +342,17 @@ def _conversations_payload(*, limit: int, offset: int, search: str) -> dict:
     page = list(conversations[offset : offset + limit + 1])
     items = page[:limit]
     has_more = len(page) > limit
-    return {
+    payload = {
         "conversations": [conversation_to_dict(item) for item in items],
         "offset": offset,
         "limit": limit,
         "next_offset": offset + len(items),
         "has_more": has_more,
     }
+    if include_from_alias:
+        payload["from"] = offset
+        payload["next_from"] = offset + len(items)
+    return payload
 
 
 def _conversation_messages_payload(
@@ -321,6 +361,9 @@ def _conversation_messages_payload(
     limit: int,
     offset_value: str | None,
     after_id: str | None,
+    sort: str = "asc",
+    default_latest_window: bool = True,
+    include_from_alias: bool = False,
 ) -> dict:
     messages = (
         Message.objects.select_related("contact", "manager")
@@ -329,22 +372,31 @@ def _conversation_messages_payload(
     )
     if after_id and after_id.isdigit():
         messages = messages.filter(id__gt=int(after_id))
-    messages = messages.for_display()
+    messages = messages.for_display(descending=sort == "desc")
     total = messages.count()
     if offset_value is None and not after_id:
-        offset = max(total - limit, 0)
+        if default_latest_window and sort == "asc":
+            offset = max(total - limit, 0)
+        else:
+            offset = 0
     else:
         offset = _positive_int(offset_value, default=0, maximum=1_000_000)
     page = list(messages[offset : offset + limit])
-    return {
+    payload = {
         "conversation": conversation_to_dict(conversation),
         "messages": [message_to_dict(item) for item in page],
         "offset": offset,
         "limit": limit,
+        "sort": sort,
+        "next_offset": offset + len(page),
         "total": total,
         "has_more_before": offset > 0,
         "has_more_after": offset + len(page) < total,
     }
+    if include_from_alias:
+        payload["from"] = offset
+        payload["next_from"] = offset + len(page)
+    return payload
 
 
 def _external_openapi_schema(request: HttpRequest) -> dict:
@@ -499,15 +551,22 @@ def _external_openapi_schema(request: HttpRequest) -> dict:
                             "schema": {"type": "integer", "default": 100, "minimum": 0, "maximum": 100},
                         },
                         {
-                            "name": "offset",
+                            "name": "from",
                             "in": "query",
                             "schema": {"type": "integer", "default": 0, "minimum": 0, "maximum": 100000},
+                            "description": "Pagination start offset. `offset` is still accepted as a backward-compatible alias.",
                         },
                         {
                             "name": "search",
                             "in": "query",
                             "schema": {"type": "string"},
                             "description": "Search by MAX user id, username, name, legacy name, or max_chat_id.",
+                        },
+                        {
+                            "name": "sort",
+                            "in": "query",
+                            "schema": {"type": "string", "enum": ["desc", "asc"], "default": "desc"},
+                            "description": "Sort by last activity time. Default is newest conversations first.",
                         },
                     ],
                     "responses": {
@@ -522,12 +581,22 @@ def _external_openapi_schema(request: HttpRequest) -> dict:
                                                 "type": "array",
                                                 "items": {"$ref": "#/components/schemas/Conversation"},
                                             },
+                                            "from": {"type": "integer"},
                                             "offset": {"type": "integer"},
                                             "limit": {"type": "integer"},
+                                            "next_from": {"type": "integer"},
                                             "next_offset": {"type": "integer"},
                                             "has_more": {"type": "boolean"},
                                         },
-                                        "required": ["conversations", "offset", "limit", "next_offset", "has_more"],
+                                        "required": [
+                                            "conversations",
+                                            "from",
+                                            "offset",
+                                            "limit",
+                                            "next_from",
+                                            "next_offset",
+                                            "has_more",
+                                        ],
                                     }
                                 }
                             },
@@ -558,18 +627,25 @@ def _external_openapi_schema(request: HttpRequest) -> dict:
                         {
                             "name": "limit",
                             "in": "query",
-                            "schema": {"type": "integer", "default": 200, "minimum": 0, "maximum": 500},
+                            "schema": {"type": "integer", "default": 100, "minimum": 0, "maximum": 500},
                         },
                         {
-                            "name": "offset",
+                            "name": "from",
                             "in": "query",
                             "schema": {"type": "integer", "default": 0, "minimum": 0, "maximum": 1000000},
+                            "description": "Pagination start offset. `offset` is still accepted as a backward-compatible alias.",
                         },
                         {
                             "name": "after_id",
                             "in": "query",
                             "schema": {"type": "integer"},
                             "description": "Return only messages with id greater than this value.",
+                        },
+                        {
+                            "name": "sort",
+                            "in": "query",
+                            "schema": {"type": "string", "enum": ["desc", "asc"], "default": "desc"},
+                            "description": "Sort by display timestamp. Default is newest messages first.",
                         },
                     ],
                     "responses": {
@@ -585,8 +661,12 @@ def _external_openapi_schema(request: HttpRequest) -> dict:
                                                 "type": "array",
                                                 "items": {"$ref": "#/components/schemas/Message"},
                                             },
+                                            "from": {"type": "integer"},
                                             "offset": {"type": "integer"},
                                             "limit": {"type": "integer"},
+                                            "sort": {"type": "string"},
+                                            "next_from": {"type": "integer"},
+                                            "next_offset": {"type": "integer"},
                                             "total": {"type": "integer"},
                                             "has_more_before": {"type": "boolean"},
                                             "has_more_after": {"type": "boolean"},
@@ -594,8 +674,12 @@ def _external_openapi_schema(request: HttpRequest) -> dict:
                                         "required": [
                                             "conversation",
                                             "messages",
+                                            "from",
                                             "offset",
                                             "limit",
+                                            "sort",
+                                            "next_from",
+                                            "next_offset",
                                             "total",
                                             "has_more_before",
                                             "has_more_after",

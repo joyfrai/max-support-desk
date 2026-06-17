@@ -157,9 +157,20 @@ Authorization: Bearer <SUPPORT_EXTERNAL_API_TOKEN>
 curl https://support.example.com/api/external/conversations/ \
   -H "Authorization: Bearer $SUPPORT_EXTERNAL_API_TOKEN"
 
-curl "https://support.example.com/api/external/conversations/42/messages/?limit=200" \
+curl "https://support.example.com/api/external/conversations/?from=0&limit=100&sort=desc" \
+  -H "Authorization: Bearer $SUPPORT_EXTERNAL_API_TOKEN"
+
+curl "https://support.example.com/api/external/conversations/42/messages/?from=0&limit=100&sort=desc" \
   -H "Authorization: Bearer $SUPPORT_EXTERNAL_API_TOKEN"
 ```
+
+Pagination and sorting:
+
+- `limit` по умолчанию `100`
+- `from` по умолчанию `0`
+- `sort=desc` по умолчанию для диалогов и сообщений, то есть сначала самые новые
+- при необходимости можно запросить `sort=asc`
+- `offset` пока тоже принимается как backward-compatible alias для `from`
 
 `/api/external/openapi.json` отдает OpenAPI schema для этих endpoint'ов. Ее можно импортировать в Postman, Swagger UI или любой другой клиент, который понимает OpenAPI.
 

@@ -19,6 +19,13 @@ urlpatterns = [
     path("support/", lambda request: redirect("admin_support_chats"), name="support_home"),
     path("webhooks/max/", max_webhook, name="max_webhook"),
     path("api/conversations/", views_api.conversations_api, name="api_conversations"),
+    path("api/external/openapi.json", views_api.external_api_openapi, name="external_api_openapi"),
+    path("api/external/conversations/", views_api.external_conversations_api, name="external_api_conversations"),
+    path(
+        "api/external/conversations/<int:conversation_id>/messages/",
+        views_api.external_conversation_messages_api,
+        name="external_api_conversation_messages",
+    ),
     path(
         "api/conversations/<int:conversation_id>/messages/",
         views_api.conversation_messages_api,

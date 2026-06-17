@@ -127,6 +127,53 @@ X-Max-Bot-Api-Secret: <MAX_WEBHOOK_SECRET>
 
 Значение должно совпадать с `MAX_WEBHOOK_SECRET` в `.env`. Если секрет не совпадает, приложение вернет `403`.
 
+## External read-only API
+
+Для внешней интеграции доступен отдельный read-only API поверх тех же диалогов и сообщений.
+
+Что включить в `.env`:
+
+```bash
+SUPPORT_EXTERNAL_API_TOKEN=replace-with-long-random-token
+```
+
+Routes:
+
+```text
+GET /api/external/conversations/
+GET /api/external/conversations/<conversation_id>/messages/
+GET /api/external/openapi.json
+```
+
+Auth header:
+
+```text
+Authorization: Bearer <SUPPORT_EXTERNAL_API_TOKEN>
+```
+
+Примеры:
+
+```bash
+curl https://support.example.com/api/external/conversations/ \
+  -H "Authorization: Bearer $SUPPORT_EXTERNAL_API_TOKEN"
+
+curl "https://support.example.com/api/external/conversations/?from=0&limit=100&sort=desc" \
+  -H "Authorization: Bearer $SUPPORT_EXTERNAL_API_TOKEN"
+
+curl "https://support.example.com/api/external/conversations/42/messages/?from=0&limit=100&sort=desc" \
+  -H "Authorization: Bearer $SUPPORT_EXTERNAL_API_TOKEN"
+```
+
+Pagination and sorting:
+
+- `limit` по умолчанию `100`
+- `from` по умолчанию `0`
+- `sort=desc` по умолчанию для диалогов и сообщений, то есть сначала самые новые
+- при необходимости можно запросить `sort=asc`
+- `offset` пока тоже принимается как backward-compatible alias для `from`
+
+`/api/external/openapi.json` отдает OpenAPI schema для этих endpoint'ов. Ее можно импортировать в Postman, Swagger UI или любой другой клиент, который понимает OpenAPI.
+
 ## Nginx
 
 Готовый пример лежит в [deploy/nginx/max-support-desk.conf](deploy/nginx/max-support-desk.conf).

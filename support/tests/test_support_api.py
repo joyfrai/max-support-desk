@@ -130,6 +130,224 @@ def test_conversations_api_searches_contacts(client, staff_user) -> None:
 
 
 @pytest.mark.django_db
+def test_external_conversations_api_requires_bearer_token(client, conversation, settings) -> None:
+    settings.SUPPORT_EXTERNAL_API_TOKEN = "external-secret"
+
+    response = client.get(reverse("external_api_conversations"))
+
+    assert response.status_code == 401
+    assert response["WWW-Authenticate"] == 'Bearer realm="max-support-desk-external-api"'
+    assert as_json(response) == {"ok": False, "error": "unauthorized"}
+
+
+@pytest.mark.django_db
+def test_external_conversations_api_returns_service_unavailable_when_disabled(client, conversation) -> None:
+    response = client.get(reverse("external_api_conversations"))
+
+    assert response.status_code == 503
+    assert as_json(response) == {"ok": False, "error": "external_api_disabled"}
+
+
+@pytest.mark.django_db
+def test_external_conversations_api_returns_conversations_with_token(client, conversation, settings) -> None:
+    settings.SUPPORT_EXTERNAL_API_TOKEN = "external-secret"
+
+    response = client.get(
+        reverse("external_api_conversations"),
+        HTTP_AUTHORIZATION="Bearer external-secret",
+    )
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert payload["conversations"][0]["id"] == conversation.id
+    assert payload["conversations"][0]["max_chat_id"] == conversation.max_chat_id
+    assert payload["conversations"][0]["contact"]["username"] == "client"
+    assert payload["from"] == 0
+    assert payload["next_from"] == 1
+
+
+@pytest.mark.django_db
+def test_external_conversations_api_supports_sorting(client, settings) -> None:
+    settings.SUPPORT_EXTERNAL_API_TOKEN = "external-secret"
+    contacts = [
+        MaxContact.objects.create(max_user_id=f"sort-user-{index}", first_name="Sort", last_name=str(index))
+        for index in range(3)
+    ]
+    now = timezone.now()
+    for index, contact_item in enumerate(contacts):
+        Conversation.objects.create(
+            contact=contact_item,
+            status=Conversation.Status.OPEN,
+            last_message_at=now - timedelta(minutes=index),
+        )
+
+    desc_response = client.get(
+        reverse("external_api_conversations"),
+        HTTP_AUTHORIZATION="Bearer external-secret",
+    )
+    asc_response = client.get(
+        reverse("external_api_conversations"),
+        {"sort": "asc"},
+        HTTP_AUTHORIZATION="Bearer external-secret",
+    )
+
+    assert [item["contact"]["max_user_id"] for item in as_json(desc_response)["conversations"][:3]] == [
+        "sort-user-0",
+        "sort-user-1",
+        "sort-user-2",
+    ]
+    assert [item["contact"]["max_user_id"] for item in as_json(asc_response)["conversations"][:3]] == [
+        "sort-user-2",
+        "sort-user-1",
+        "sort-user-0",
+    ]
+
+
+@pytest.mark.django_db
+def test_external_messages_api_returns_messages_with_token(client, conversation, contact, settings) -> None:
+    settings.SUPPORT_EXTERNAL_API_TOKEN = "external-secret"
+    message = Message.objects.create(
+        conversation=conversation,
+        contact=contact,
+        direction=Message.Direction.INCOMING,
+        sender_kind=Message.SenderKind.MAX_USER,
+        text="hello from max",
+        max_message_id="max-42",
+    )
+
+    response = client.get(
+        reverse("external_api_conversation_messages", args=[conversation.id]),
+        HTTP_AUTHORIZATION="Bearer external-secret",
+    )
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert payload["conversation"]["id"] == conversation.id
+    assert payload["messages"][0]["id"] == message.id
+    assert payload["messages"][0]["max_message_id"] == "max-42"
+    assert payload["messages"][0]["text"] == "hello from max"
+    assert payload["from"] == 0
+    assert payload["limit"] == 100
+    assert payload["sort"] == "desc"
+    assert payload["next_from"] == 1
+
+
+@pytest.mark.django_db
+def test_external_messages_api_defaults_to_newest_first_and_limit_100(client, conversation, contact, settings) -> None:
+    settings.SUPPORT_EXTERNAL_API_TOKEN = "external-secret"
+    messages = [
+        Message(
+            conversation=conversation,
+            contact=contact,
+            direction=Message.Direction.INCOMING,
+            sender_kind=Message.SenderKind.MAX_USER,
+            text=f"message {index}",
+        )
+        for index in range(105)
+    ]
+    Message.objects.bulk_create(messages)
+
+    response = client.get(
+        reverse("external_api_conversation_messages", args=[conversation.id]),
+        HTTP_AUTHORIZATION="Bearer external-secret",
+    )
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert len(payload["messages"]) == 100
+    assert payload["messages"][0]["text"] == "message 104"
+    assert payload["messages"][-1]["text"] == "message 5"
+    assert payload["from"] == 0
+    assert payload["offset"] == 0
+    assert payload["limit"] == 100
+    assert payload["sort"] == "desc"
+    assert payload["next_from"] == 100
+    assert payload["next_offset"] == 100
+    assert payload["total"] == 105
+    assert payload["has_more_before"] is False
+    assert payload["has_more_after"] is True
+
+
+@pytest.mark.django_db
+def test_external_messages_api_supports_from_parameter(client, conversation, contact, settings) -> None:
+    settings.SUPPORT_EXTERNAL_API_TOKEN = "external-secret"
+    messages = [
+        Message(
+            conversation=conversation,
+            contact=contact,
+            direction=Message.Direction.INCOMING,
+            sender_kind=Message.SenderKind.MAX_USER,
+            text=f"message {index}",
+        )
+        for index in range(5)
+    ]
+    Message.objects.bulk_create(messages)
+
+    response = client.get(
+        reverse("external_api_conversation_messages", args=[conversation.id]),
+        {"from": "1", "limit": "2", "sort": "desc"},
+        HTTP_AUTHORIZATION="Bearer external-secret",
+    )
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert [item["text"] for item in payload["messages"]] == ["message 3", "message 2"]
+    assert payload["from"] == 1
+    assert payload["offset"] == 1
+    assert payload["next_from"] == 3
+    assert payload["next_offset"] == 3
+
+
+@pytest.mark.django_db
+def test_external_messages_api_supports_ascending_sort(client, conversation, contact, settings) -> None:
+    settings.SUPPORT_EXTERNAL_API_TOKEN = "external-secret"
+    messages = [
+        Message(
+            conversation=conversation,
+            contact=contact,
+            direction=Message.Direction.INCOMING,
+            sender_kind=Message.SenderKind.MAX_USER,
+            text=f"message {index}",
+        )
+        for index in range(3)
+    ]
+    Message.objects.bulk_create(messages)
+
+    response = client.get(
+        reverse("external_api_conversation_messages", args=[conversation.id]),
+        {"sort": "asc", "limit": "2"},
+        HTTP_AUTHORIZATION="Bearer external-secret",
+    )
+
+    assert response.status_code == 200
+    payload = as_json(response)
+    assert [item["text"] for item in payload["messages"]] == ["message 0", "message 1"]
+    assert payload["sort"] == "asc"
+    assert payload["has_more_before"] is False
+    assert payload["has_more_after"] is True
+
+
+@pytest.mark.django_db
+def test_external_openapi_schema_lists_external_routes(client, settings) -> None:
+    settings.SUPPORT_DESK_PUBLIC_URL = "https://support.example.com"
+
+    response = client.get(reverse("external_api_openapi"))
+
+    assert response.status_code == 200
+    assert response["Content-Type"].startswith("application/vnd.oai.openapi+json")
+    payload = as_json(response)
+    assert payload["openapi"] == "3.0.3"
+    assert payload["servers"] == [{"url": "https://support.example.com"}]
+    assert "/api/external/conversations/" in payload["paths"]
+    assert "/api/external/conversations/{conversation_id}/messages/" in payload["paths"]
+    assert payload["components"]["securitySchemes"]["BearerAuth"]["scheme"] == "bearer"
+    assert payload["paths"]["/api/external/conversations/"]["get"]["parameters"][1]["name"] == "from"
+    assert payload["paths"]["/api/external/conversations/{conversation_id}/messages/"]["get"]["parameters"][2]["name"] == "from"
+    assert payload["paths"]["/api/external/conversations/"]["get"]["parameters"][-1]["name"] == "sort"
+    assert payload["paths"]["/api/external/conversations/{conversation_id}/messages/"]["get"]["parameters"][-1]["name"] == "sort"
+
+
+@pytest.mark.django_db
 def test_messages_api_orders_by_display_order(client, staff_user, conversation, contact) -> None:
     now = timezone.now()
     later = Message.objects.create(

@@ -121,7 +121,10 @@ class RawUpdate(models.Model):
 
 
 class MessageQuerySet(QuerySet):
-    def for_display(self) -> "MessageQuerySet":
+    def for_display(self, *, descending: bool = False) -> "MessageQuerySet":
+        order_by = ["display_created_at", "display_missing_provider_at", "id"]
+        if descending:
+            order_by = ["-display_created_at", "-display_missing_provider_at", "-id"]
         return self.annotate(
             display_created_at=Case(
                 When(
@@ -141,7 +144,7 @@ class MessageQuerySet(QuerySet):
                 default=Value(0),
                 output_field=models.IntegerField(),
             ),
-        ).order_by("display_created_at", "display_missing_provider_at", "id")
+        ).order_by(*order_by)
 
 
 class Message(TimestampedModel):

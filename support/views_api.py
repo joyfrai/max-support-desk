@@ -5,6 +5,7 @@ import ipaddress
 import json
 import logging
 import mimetypes
+import secrets
 import socket
 from email.message import Message as EmailMessage
 from functools import wraps
@@ -18,6 +19,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
@@ -54,33 +56,36 @@ def parse_json_body(request: HttpRequest) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
+def external_api_bearer_required(view_func):
+    @wraps(view_func)
+    def wrapper(request: HttpRequest, *args, **kwargs):
+        configured_token = settings.SUPPORT_EXTERNAL_API_TOKEN
+        if not configured_token:
+            logger.warning("external_api_disabled path=%s", request.path)
+            return JsonResponse({"ok": False, "error": "external_api_disabled"}, status=503)
+
+        provided_token = _extract_bearer_token(request.headers.get("Authorization", ""))
+        if not provided_token or not secrets.compare_digest(provided_token, configured_token):
+            logger.warning(
+                "external_api_permission_denied path=%s remote_addr=%s",
+                request.path,
+                request.META.get("REMOTE_ADDR", ""),
+            )
+            response = JsonResponse({"ok": False, "error": "unauthorized"}, status=401)
+            response["WWW-Authenticate"] = 'Bearer realm="max-support-desk-external-api"'
+            return response
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
+
+
 @require_GET
 @staff_required_json
 def conversations_api(request: HttpRequest) -> JsonResponse:
     limit = _positive_int(request.GET.get("limit"), default=100, maximum=100)
     offset = _positive_int(request.GET.get("offset"), default=0, maximum=100_000)
     search = (request.GET.get("search") or "").strip()
-
-    conversations = (
-        Conversation.objects.select_related("contact", "assigned_to", "last_message")
-        .all()
-        .order_by("-last_message_at", "-updated_at", "id")
-    )
-    if search:
-        conversations = _filter_conversations(conversations, search)
-
-    page = list(conversations[offset : offset + limit + 1])
-    items = page[:limit]
-    has_more = len(page) > limit
-    return JsonResponse(
-        {
-            "conversations": [conversation_to_dict(item) for item in items],
-            "offset": offset,
-            "limit": limit,
-            "next_offset": offset + len(items),
-            "has_more": has_more,
-        }
-    )
+    return JsonResponse(_conversations_payload(limit=limit, offset=offset, search=search))
 
 
 @require_http_methods(["GET", "POST"])
@@ -95,29 +100,13 @@ def conversation_messages_api(request: HttpRequest, conversation_id: int) -> Jso
         after_id = request.GET.get("after_id")
         limit = _positive_int(request.GET.get("limit"), default=200, maximum=500)
         offset_value = request.GET.get("offset")
-        messages = (
-            Message.objects.select_related("contact", "manager")
-            .prefetch_related("attachments")
-            .filter(conversation=conversation)
-        )
-        if after_id and after_id.isdigit():
-            messages = messages.filter(id__gt=int(after_id))
-        messages = messages.for_display()
-        total = messages.count()
-        if offset_value is None and not after_id:
-            offset = max(total - limit, 0)
-        else:
-            offset = _positive_int(offset_value, default=0, maximum=1_000_000)
-        page = list(messages[offset : offset + limit])
         return JsonResponse(
-            {
-                "messages": [message_to_dict(item) for item in page],
-                "offset": offset,
-                "limit": limit,
-                "total": total,
-                "has_more_before": offset > 0,
-                "has_more_after": offset + len(page) < total,
-            }
+            _conversation_messages_payload(
+                conversation=conversation,
+                limit=limit,
+                offset_value=offset_value,
+                after_id=after_id,
+            )
         )
 
     payload = parse_json_body(request) if request.content_type == "application/json" else request.POST
@@ -175,6 +164,57 @@ def conversation_messages_api(request: HttpRequest, conversation_id: int) -> Jso
     return JsonResponse(
         {"message": message_to_dict(message), "conversation": conversation_to_dict(conversation)},
         status=201,
+    )
+
+
+@require_GET
+@external_api_bearer_required
+def external_conversations_api(request: HttpRequest) -> JsonResponse:
+    limit = _positive_int(request.GET.get("limit"), default=100, maximum=100)
+    from_value = _pagination_from(request, default=0, maximum=100_000)
+    search = (request.GET.get("search") or "").strip()
+    sort = _parse_sort(request.GET.get("sort"), default="desc")
+    return JsonResponse(
+        _conversations_payload(
+            limit=limit,
+            offset=from_value,
+            search=search,
+            sort=sort,
+            include_from_alias=True,
+        )
+    )
+
+
+@require_GET
+@external_api_bearer_required
+def external_conversation_messages_api(request: HttpRequest, conversation_id: int) -> JsonResponse:
+    conversation = get_object_or_404(
+        Conversation.objects.select_related("contact", "assigned_to"),
+        pk=conversation_id,
+    )
+    after_id = request.GET.get("after_id")
+    limit = _positive_int(request.GET.get("limit"), default=100, maximum=500)
+    from_value = _pagination_from(request, default=0, maximum=1_000_000)
+    sort = _parse_sort(request.GET.get("sort"), default="desc")
+    return JsonResponse(
+        _conversation_messages_payload(
+            conversation=conversation,
+            limit=limit,
+            offset_value=str(from_value),
+            after_id=after_id,
+            sort=sort,
+            default_latest_window=False,
+            include_from_alias=True,
+        )
+    )
+
+
+@require_GET
+def external_api_openapi(request: HttpRequest) -> JsonResponse:
+    return JsonResponse(
+        _external_openapi_schema(request),
+        json_dumps_params={"ensure_ascii": False},
+        content_type="application/vnd.oai.openapi+json",
     )
 
 
@@ -258,6 +298,410 @@ def _positive_int(value: str | None, *, default: int, maximum: int) -> int:
     except (TypeError, ValueError):
         return default
     return max(0, min(parsed, maximum))
+
+
+def _extract_bearer_token(header_value: str) -> str:
+    scheme, _, token = header_value.partition(" ")
+    if scheme.lower() != "bearer":
+        return ""
+    return token.strip()
+
+
+def _parse_sort(value: str | None, *, default: str) -> str:
+    if value and value.lower() in {"asc", "desc"}:
+        return value.lower()
+    return default
+
+
+def _pagination_from(request: HttpRequest, *, default: int, maximum: int) -> int:
+    raw_value = request.GET.get("from")
+    if raw_value is None:
+        raw_value = request.GET.get("offset")
+    return _positive_int(raw_value, default=default, maximum=maximum)
+
+
+def _conversations_payload(
+    *,
+    limit: int,
+    offset: int,
+    search: str,
+    sort: str = "desc",
+    include_from_alias: bool = False,
+) -> dict:
+    ordering = ["-last_message_at", "-updated_at", "id"]
+    if sort == "asc":
+        ordering = ["last_message_at", "updated_at", "id"]
+    conversations = (
+        Conversation.objects.select_related("contact", "assigned_to", "last_message")
+        .all()
+        .order_by(*ordering)
+    )
+    if search:
+        conversations = _filter_conversations(conversations, search)
+
+    page = list(conversations[offset : offset + limit + 1])
+    items = page[:limit]
+    has_more = len(page) > limit
+    payload = {
+        "conversations": [conversation_to_dict(item) for item in items],
+        "offset": offset,
+        "limit": limit,
+        "next_offset": offset + len(items),
+        "has_more": has_more,
+    }
+    if include_from_alias:
+        payload["from"] = offset
+        payload["next_from"] = offset + len(items)
+    return payload
+
+
+def _conversation_messages_payload(
+    *,
+    conversation: Conversation,
+    limit: int,
+    offset_value: str | None,
+    after_id: str | None,
+    sort: str = "asc",
+    default_latest_window: bool = True,
+    include_from_alias: bool = False,
+) -> dict:
+    messages = (
+        Message.objects.select_related("contact", "manager")
+        .prefetch_related("attachments")
+        .filter(conversation=conversation)
+    )
+    if after_id and after_id.isdigit():
+        messages = messages.filter(id__gt=int(after_id))
+    messages = messages.for_display(descending=sort == "desc")
+    total = messages.count()
+    if offset_value is None and not after_id:
+        if default_latest_window and sort == "asc":
+            offset = max(total - limit, 0)
+        else:
+            offset = 0
+    else:
+        offset = _positive_int(offset_value, default=0, maximum=1_000_000)
+    page = list(messages[offset : offset + limit])
+    payload = {
+        "conversation": conversation_to_dict(conversation),
+        "messages": [message_to_dict(item) for item in page],
+        "offset": offset,
+        "limit": limit,
+        "sort": sort,
+        "next_offset": offset + len(page),
+        "total": total,
+        "has_more_before": offset > 0,
+        "has_more_after": offset + len(page) < total,
+    }
+    if include_from_alias:
+        payload["from"] = offset
+        payload["next_from"] = offset + len(page)
+    return payload
+
+
+def _external_openapi_schema(request: HttpRequest) -> dict:
+    server_url = (settings.SUPPORT_DESK_PUBLIC_URL or request.build_absolute_uri("/")).rstrip("/")
+    return {
+        "openapi": "3.0.3",
+        "info": {
+            "title": "MAX Support Desk External API",
+            "version": "1.0.0",
+            "description": "Read-only API for exporting conversations and messages from MAX Support Desk.",
+        },
+        "servers": [{"url": server_url}],
+        "components": {
+            "securitySchemes": {
+                "BearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "API token",
+                    "description": "Use Authorization: Bearer <SUPPORT_EXTERNAL_API_TOKEN>.",
+                }
+            },
+            "schemas": {
+                "ApiError": {
+                    "type": "object",
+                    "properties": {
+                        "ok": {"type": "boolean"},
+                        "error": {"type": "string"},
+                    },
+                    "required": ["ok", "error"],
+                },
+                "Contact": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "max_user_id": {"type": "string"},
+                        "username": {"type": "string"},
+                        "first_name": {"type": "string"},
+                        "last_name": {"type": "string"},
+                        "is_bot": {"type": "boolean"},
+                        "last_seen_at": {"type": "string", "format": "date-time", "nullable": True},
+                    },
+                    "required": ["id", "max_user_id", "username", "first_name", "last_name", "is_bot", "last_seen_at"],
+                },
+                "Conversation": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "max_chat_id": {"type": "string"},
+                        "recipient_type": {"type": "string"},
+                        "contact": {"$ref": "#/components/schemas/Contact"},
+                        "status": {"type": "string"},
+                        "assigned_to_id": {"type": "integer", "nullable": True},
+                        "last_message_id": {"type": "integer", "nullable": True},
+                        "last_message_at": {"type": "string", "format": "date-time", "nullable": True},
+                        "unread_count": {"type": "integer"},
+                        "closed_at": {"type": "string", "format": "date-time", "nullable": True},
+                        "created_at": {"type": "string", "format": "date-time", "nullable": True},
+                        "updated_at": {"type": "string", "format": "date-time", "nullable": True},
+                    },
+                    "required": [
+                        "id",
+                        "max_chat_id",
+                        "recipient_type",
+                        "contact",
+                        "status",
+                        "assigned_to_id",
+                        "last_message_id",
+                        "last_message_at",
+                        "unread_count",
+                        "closed_at",
+                        "created_at",
+                        "updated_at",
+                    ],
+                },
+                "Attachment": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "file_name": {"type": "string"},
+                        "mime_type": {"type": "string"},
+                        "size_bytes": {"type": "integer", "nullable": True},
+                        "download_url": {"type": "string"},
+                    },
+                    "required": ["id", "file_name", "mime_type", "size_bytes", "download_url"],
+                },
+                "Message": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "conversation_id": {"type": "integer"},
+                        "contact_id": {"type": "integer"},
+                        "direction": {"type": "string"},
+                        "sender_kind": {"type": "string"},
+                        "author_kind": {"type": "string"},
+                        "author_display": {"type": "string"},
+                        "manager_id": {"type": "integer", "nullable": True},
+                        "max_message_id": {"type": "string"},
+                        "max_sender_user_id": {"type": "string"},
+                        "external_event_key": {"type": "string"},
+                        "reply_to_message_id": {"type": "integer", "nullable": True},
+                        "text": {"type": "string"},
+                        "text_format": {"type": "string"},
+                        "content_type": {"type": "string"},
+                        "send_status": {"type": "string"},
+                        "provider_created_at": {"type": "string", "format": "date-time", "nullable": True},
+                        "created_at": {"type": "string", "format": "date-time", "nullable": True},
+                        "received_at": {"type": "string", "format": "date-time", "nullable": True},
+                        "sent_at": {"type": "string", "format": "date-time", "nullable": True},
+                        "sort_key": {"type": "string", "format": "date-time", "nullable": True},
+                        "attachments": {
+                            "type": "array",
+                            "items": {"$ref": "#/components/schemas/Attachment"},
+                        },
+                    },
+                    "required": [
+                        "id",
+                        "conversation_id",
+                        "contact_id",
+                        "direction",
+                        "sender_kind",
+                        "author_kind",
+                        "author_display",
+                        "manager_id",
+                        "max_message_id",
+                        "max_sender_user_id",
+                        "external_event_key",
+                        "reply_to_message_id",
+                        "text",
+                        "text_format",
+                        "content_type",
+                        "send_status",
+                        "provider_created_at",
+                        "created_at",
+                        "received_at",
+                        "sent_at",
+                        "sort_key",
+                        "attachments",
+                    ],
+                },
+            },
+        },
+        "paths": {
+            reverse("external_api_conversations"): {
+                "get": {
+                    "operationId": "listConversations",
+                    "summary": "Get all conversations",
+                    "security": [{"BearerAuth": []}],
+                    "parameters": [
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "schema": {"type": "integer", "default": 100, "minimum": 0, "maximum": 100},
+                        },
+                        {
+                            "name": "from",
+                            "in": "query",
+                            "schema": {"type": "integer", "default": 0, "minimum": 0, "maximum": 100000},
+                            "description": "Pagination start offset. `offset` is still accepted as a backward-compatible alias.",
+                        },
+                        {
+                            "name": "search",
+                            "in": "query",
+                            "schema": {"type": "string"},
+                            "description": "Search by MAX user id, username, name, legacy name, or max_chat_id.",
+                        },
+                        {
+                            "name": "sort",
+                            "in": "query",
+                            "schema": {"type": "string", "enum": ["desc", "asc"], "default": "desc"},
+                            "description": "Sort by last activity time. Default is newest conversations first.",
+                        },
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Conversation list",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "conversations": {
+                                                "type": "array",
+                                                "items": {"$ref": "#/components/schemas/Conversation"},
+                                            },
+                                            "from": {"type": "integer"},
+                                            "offset": {"type": "integer"},
+                                            "limit": {"type": "integer"},
+                                            "next_from": {"type": "integer"},
+                                            "next_offset": {"type": "integer"},
+                                            "has_more": {"type": "boolean"},
+                                        },
+                                        "required": [
+                                            "conversations",
+                                            "from",
+                                            "offset",
+                                            "limit",
+                                            "next_from",
+                                            "next_offset",
+                                            "has_more",
+                                        ],
+                                    }
+                                }
+                            },
+                        },
+                        "401": {
+                            "description": "Missing or invalid bearer token",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}},
+                        },
+                        "503": {
+                            "description": "External API token is not configured",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}},
+                        },
+                    },
+                }
+            },
+            reverse("external_api_conversation_messages", args=[0]).replace("/0/", "/{conversation_id}/"): {
+                "get": {
+                    "operationId": "listConversationMessages",
+                    "summary": "Get messages for a conversation",
+                    "security": [{"BearerAuth": []}],
+                    "parameters": [
+                        {
+                            "name": "conversation_id",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "integer"},
+                        },
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "schema": {"type": "integer", "default": 100, "minimum": 0, "maximum": 500},
+                        },
+                        {
+                            "name": "from",
+                            "in": "query",
+                            "schema": {"type": "integer", "default": 0, "minimum": 0, "maximum": 1000000},
+                            "description": "Pagination start offset. `offset` is still accepted as a backward-compatible alias.",
+                        },
+                        {
+                            "name": "after_id",
+                            "in": "query",
+                            "schema": {"type": "integer"},
+                            "description": "Return only messages with id greater than this value.",
+                        },
+                        {
+                            "name": "sort",
+                            "in": "query",
+                            "schema": {"type": "string", "enum": ["desc", "asc"], "default": "desc"},
+                            "description": "Sort by display timestamp. Default is newest messages first.",
+                        },
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Conversation messages",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "conversation": {"$ref": "#/components/schemas/Conversation"},
+                                            "messages": {
+                                                "type": "array",
+                                                "items": {"$ref": "#/components/schemas/Message"},
+                                            },
+                                            "from": {"type": "integer"},
+                                            "offset": {"type": "integer"},
+                                            "limit": {"type": "integer"},
+                                            "sort": {"type": "string"},
+                                            "next_from": {"type": "integer"},
+                                            "next_offset": {"type": "integer"},
+                                            "total": {"type": "integer"},
+                                            "has_more_before": {"type": "boolean"},
+                                            "has_more_after": {"type": "boolean"},
+                                        },
+                                        "required": [
+                                            "conversation",
+                                            "messages",
+                                            "from",
+                                            "offset",
+                                            "limit",
+                                            "sort",
+                                            "next_from",
+                                            "next_offset",
+                                            "total",
+                                            "has_more_before",
+                                            "has_more_after",
+                                        ],
+                                    }
+                                }
+                            },
+                        },
+                        "401": {
+                            "description": "Missing or invalid bearer token",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}},
+                        },
+                        "404": {"description": "Conversation not found"},
+                        "503": {
+                            "description": "External API token is not configured",
+                            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}},
+                        },
+                    },
+                }
+            },
+        },
+    }
 
 
 def _filter_conversations(queryset, search: str):

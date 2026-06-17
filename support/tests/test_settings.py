@@ -30,3 +30,4 @@ def test_notification_settings_are_defined() -> None:
     assert hasattr(project_settings, "TELEGRAM_NOTIFICATION_CHAT_ID")
     assert hasattr(project_settings, "MAX_NOTIFICATION_CHAT_ID")
     assert hasattr(project_settings, "SUPPORT_DESK_PUBLIC_URL")
+    assert hasattr(project_settings, "SUPPORT_EXTERNAL_API_TOKEN")

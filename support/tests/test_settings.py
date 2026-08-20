@@ -27,6 +27,12 @@ def test_cross_origin_opener_policy_is_configurable() -> None:
     assert hasattr(project_settings, "SECURE_CROSS_ORIGIN_OPENER_POLICY")
 
 
+def test_secure_cookie_settings_are_configurable() -> None:
+    assert hasattr(project_settings, "SECURE_SSL_REDIRECT")
+    assert hasattr(project_settings, "SESSION_COOKIE_SECURE")
+    assert hasattr(project_settings, "CSRF_COOKIE_SECURE")
+
+
 def test_notification_settings_are_defined() -> None:
     assert hasattr(project_settings, "TELEGRAM_BOT_TOKEN")
     assert hasattr(project_settings, "TELEGRAM_NOTIFICATION_CHAT_ID")

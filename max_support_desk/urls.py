@@ -5,6 +5,7 @@ from django.shortcuts import redirect
 from django.urls import path
 from django.views.generic import RedirectView
 
+from max_support_desk.demo_views import demo_admin_route_disabled
 from support.admin_views import chats_admin_view, export_max_users_csv_view
 from support import views_api
 from support.views_webhook import max_webhook
@@ -56,6 +57,16 @@ urlpatterns = [
         "admin/export/max-users.csv",
         admin.site.admin_view(export_max_users_csv_view),
         name="admin_export_max_users_csv",
+    ),
+    *(
+        [
+            path("admin/password_change/", demo_admin_route_disabled, name="demo_password_change_disabled"),
+            path("admin/password_change/done/", demo_admin_route_disabled, name="demo_password_change_done_disabled"),
+            path("admin/auth/", demo_admin_route_disabled, name="demo_auth_disabled"),
+            path("admin/auth/<path:subpath>", demo_admin_route_disabled, name="demo_auth_subpath_disabled"),
+        ]
+        if settings.DEMO_LOGIN_HINTS
+        else []
     ),
     path("admin/", admin.site.urls),
 ]

@@ -114,6 +114,11 @@ def conversation_messages_api(request: HttpRequest, conversation_id: int) -> Jso
     uploaded_files = list(request.FILES.values())
     if not text and not uploaded_files:
         return JsonResponse({"ok": False, "error": "text_required"}, status=400)
+    if settings.DEMO_LOGIN_HINTS and uploaded_files:
+        return JsonResponse(
+            {"ok": False, "error": "file_uploads_disabled_in_demo"},
+            status=403,
+        )
 
     with transaction.atomic():
         message = Message.objects.create(

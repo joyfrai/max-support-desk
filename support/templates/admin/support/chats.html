@@ -11,6 +11,7 @@
     id="support-desk-root"
     data-api-base="{{ request.script_name|default:'' }}/api/"
     data-base-path="{{ request.script_name|default:'' }}"
+    data-demo-mode="{% if demo_login %}true{% else %}false{% endif %}"
 ></div>
 <script type="module" src="{% static 'support-desk.js' %}"></script>
 {% endblock %}

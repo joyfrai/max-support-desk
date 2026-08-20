@@ -84,6 +84,24 @@ def test_manager_can_upload_attachment_without_text(client, staff_user, conversa
 
 
 @pytest.mark.django_db
+def test_demo_mode_rejects_attachment_uploads(client, staff_user, conversation, tmp_path, settings) -> None:
+    settings.MEDIA_ROOT = tmp_path
+    settings.DEMO_LOGIN_HINTS = True
+    client.force_login(staff_user)
+    upload = SimpleUploadedFile("blocked.txt", b"not stored", content_type="text/plain")
+
+    response = client.post(
+        reverse("api_conversation_messages", args=[conversation.id]),
+        data={"text": "Попытка загрузки", "file": upload},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"ok": False, "error": "file_uploads_disabled_in_demo"}
+    assert Message.objects.count() == 0
+    assert MessageAttachment.objects.count() == 0
+
+
+@pytest.mark.django_db
 def test_attachment_download_is_staff_protected(client, staff_user, conversation, contact, tmp_path, settings) -> None:
     settings.MEDIA_ROOT = tmp_path
     message = Message.objects.create(

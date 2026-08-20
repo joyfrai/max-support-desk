@@ -106,6 +106,9 @@ function renderMessageContent(message: Message) {
 }
 
 export function SupportDeskApp() {
+  const supportDeskRoot = document.getElementById("support-desk-root");
+  const uploadsDisabled = supportDeskRoot?.dataset.demoMode === "true";
+  const uploadsDisabledMessage = "Загрузка файлов в демо-режиме недоступна";
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -330,6 +333,7 @@ export function SupportDeskApp() {
         className="support-desk-file-input"
         type="file"
         multiple
+        disabled={uploadsDisabled}
         onChange={handleFileInputChange}
       />
       <MainContainer responsive={!isCompactMobile}>
@@ -439,8 +443,12 @@ export function SupportDeskApp() {
               placeholder="Введите сообщение"
               value={messageInputValue}
               attachButton
+              attachDisabled={uploadsDisabled}
+              title={uploadsDisabled ? uploadsDisabledMessage : undefined}
               sendDisabled={!activeId || (!activeInputText.trim() && activeFiles.length === 0)}
-              onAttachClick={() => fileInputRef.current?.click()}
+              onAttachClick={() => {
+                if (!uploadsDisabled) fileInputRef.current?.click();
+              }}
               onChange={handleInputChange}
               onSend={handleSend}
             />

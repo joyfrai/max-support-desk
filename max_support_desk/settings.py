@@ -166,8 +166,8 @@ MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", BASE_DIR / "media"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "admin:login"
-LOGIN_REDIRECT_URL = "/admin/"
-LOGOUT_REDIRECT_URL = "/admin/login/"
+LOGIN_REDIRECT_URL = f"{FORCE_SCRIPT_NAME.rstrip('/')}/admin/" if FORCE_SCRIPT_NAME else "/admin/"
+LOGOUT_REDIRECT_URL = f"{FORCE_SCRIPT_NAME.rstrip('/')}/admin/login/" if FORCE_SCRIPT_NAME else "/admin/login/"
 
 REDIS_URL = os.getenv("REDIS_URL", "")
 

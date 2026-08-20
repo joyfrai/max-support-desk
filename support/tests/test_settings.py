@@ -1,4 +1,6 @@
 from max_support_desk import settings as project_settings
+from max_support_desk.context_processors import demo_login
+from django.test import RequestFactory, override_settings
 
 
 def test_channel_layer_uses_memory_without_redis_url() -> None:
@@ -31,3 +33,30 @@ def test_notification_settings_are_defined() -> None:
     assert hasattr(project_settings, "MAX_NOTIFICATION_CHAT_ID")
     assert hasattr(project_settings, "SUPPORT_DESK_PUBLIC_URL")
     assert hasattr(project_settings, "SUPPORT_EXTERNAL_API_TOKEN")
+
+
+def test_demo_login_context_is_disabled_by_default() -> None:
+    request = RequestFactory().get("/admin/login/")
+
+    with override_settings(
+        DEMO_LOGIN_HINTS=False,
+        DEMO_LOGIN_USERNAME="demo-admin",
+        DEMO_LOGIN_PASSWORD="demo-pass-123",
+    ):
+        assert demo_login(request) == {"demo_login": None}
+
+
+def test_demo_login_context_exposes_configured_demo_credentials() -> None:
+    request = RequestFactory().get("/admin/login/")
+
+    with override_settings(
+        DEMO_LOGIN_HINTS=True,
+        DEMO_LOGIN_USERNAME="demo-admin",
+        DEMO_LOGIN_PASSWORD="demo-pass-123",
+    ):
+        assert demo_login(request) == {
+            "demo_login": {
+                "username": "demo-admin",
+                "password": "demo-pass-123",
+            }
+        }

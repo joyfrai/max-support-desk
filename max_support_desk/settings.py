@@ -40,6 +40,9 @@ TELEGRAM_NOTIFICATION_CHAT_ID = os.getenv("TELEGRAM_NOTIFICATION_CHAT_ID", "")
 SUPPORT_DESK_PUBLIC_URL = os.getenv("SUPPORT_DESK_PUBLIC_URL", "")
 SUPPORT_EXTERNAL_API_TOKEN = os.getenv("SUPPORT_EXTERNAL_API_TOKEN", "")
 AUDIT_LOG_RETENTION_DAYS = int(os.getenv("AUDIT_LOG_RETENTION_DAYS", "7"))
+DEMO_LOGIN_HINTS = env_bool("DEMO_LOGIN_HINTS")
+DEMO_LOGIN_USERNAME = os.getenv("DEMO_LOGIN_USERNAME", "")
+DEMO_LOGIN_PASSWORD = os.getenv("DEMO_LOGIN_PASSWORD", "")
 
 INSTALLED_APPS = [
     "unfold",
@@ -77,6 +80,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "max_support_desk.context_processors.demo_login",
             ],
         },
     },

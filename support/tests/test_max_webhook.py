@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from django.core.cache import cache
 from django.test import override_settings
 from django.urls import reverse
 
@@ -52,6 +53,45 @@ def test_max_webhook_rejects_invalid_secret(client) -> None:
     assert response.status_code == 403
     assert RawUpdate.objects.count() == 0
 
+
+@pytest.mark.django_db
+def test_max_webhook_rejects_when_secret_is_not_configured(client) -> None:
+    response = client.post(
+        reverse("max_webhook"),
+        data=max_message_created_payload(),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403
+    assert RawUpdate.objects.count() == 0
+
+
+@pytest.mark.django_db
+@override_settings(
+    DEMO_LOGIN_HINTS=True,
+    DEMO_WEBHOOK_RATE_LIMIT=1,
+    DEMO_WEBHOOK_RATE_WINDOW=60,
+    MAX_WEBHOOK_SECRET="secret",
+)
+def test_demo_max_webhook_rate_limits_requests(client) -> None:
+    cache.clear()
+
+    first_response = client.post(
+        reverse("max_webhook"),
+        data={"invalid": "json payload"},
+        content_type="application/json",
+        HTTP_X_MAX_BOT_API_SECRET="secret",
+    )
+    second_response = client.post(
+        reverse("max_webhook"),
+        data={"invalid": "json payload"},
+        content_type="application/json",
+        HTTP_X_MAX_BOT_API_SECRET="secret",
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 429
+    assert second_response["Retry-After"] == "60"
 
 @pytest.mark.django_db
 @override_settings(MAX_WEBHOOK_SECRET="secret")

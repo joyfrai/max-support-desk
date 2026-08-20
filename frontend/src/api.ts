@@ -1,5 +1,11 @@
 import type { Conversation, ConversationPage, Message, SendMessageResult } from "./types";
 
+function apiUrl(path: string): string {
+  const root = document.getElementById("support-desk-root");
+  const base = root?.dataset.apiBase || "/api/";
+  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+}
+
 function csrfToken(): string {
   const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : "";
@@ -45,12 +51,12 @@ export async function loadConversations(params: {
   query.set("offset", String(params.offset ?? 0));
   query.set("limit", String(params.limit ?? 100));
   if (params.search?.trim()) query.set("search", params.search.trim());
-  return requestJson<ConversationPage>(`/api/conversations/?${query.toString()}`);
+  return requestJson<ConversationPage>(apiUrl(`conversations/?${query.toString()}`));
 }
 
 export async function loadMessages(conversationId: number): Promise<Message[]> {
   const payload = await requestJson<{ messages: Message[] }>(
-    `/api/conversations/${conversationId}/messages/?limit=200`
+    apiUrl(`conversations/${conversationId}/messages/?limit=200`)
   );
   return payload.messages;
 }
@@ -64,10 +70,10 @@ export async function sendMessage(
     const form = new FormData();
     form.set("text", text);
     files.forEach((file) => form.append("files", file));
-    return requestFormJson<SendMessageResult>(`/api/conversations/${conversationId}/messages/`, form);
+    return requestFormJson<SendMessageResult>(apiUrl(`conversations/${conversationId}/messages/`), form);
   }
   return requestJson<SendMessageResult>(
-    `/api/conversations/${conversationId}/messages/`,
+    apiUrl(`conversations/${conversationId}/messages/`),
     {
       method: "POST",
       body: JSON.stringify({ text })
@@ -76,7 +82,7 @@ export async function sendMessage(
 }
 
 export async function retryMessage(messageId: number): Promise<Message> {
-  const payload = await requestJson<{ message: Message }>(`/api/messages/${messageId}/retry/`, {
+  const payload = await requestJson<{ message: Message }>(apiUrl(`messages/${messageId}/retry/`), {
     method: "POST"
   });
   return payload.message;

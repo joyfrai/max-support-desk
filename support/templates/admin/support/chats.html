@@ -7,6 +7,10 @@
 {% endblock %}
 
 {% block content %}
-<div id="support-desk-root" data-api-base="/api/"></div>
+<div
+    id="support-desk-root"
+    data-api-base="{{ request.script_name|default:'' }}/api/"
+    data-base-path="{{ request.script_name|default:'' }}"
+></div>
 <script type="module" src="{% static 'support-desk.js' %}"></script>
 {% endblock %}

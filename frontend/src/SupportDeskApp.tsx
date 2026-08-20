@@ -207,7 +207,9 @@ export function SupportDeskApp() {
 
   useEffect(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocol}//${window.location.host}/ws/support/`);
+    const root = document.getElementById("support-desk-root");
+    const basePath = (root?.dataset.basePath || "").replace(/\/+$/, "");
+    const socket = new WebSocket(`${protocol}//${window.location.host}${basePath}/ws/support/`);
 
     socket.onmessage = (event: MessageEvent<string>) => {
       let realtimeEvent: SupportRealtimeEvent;

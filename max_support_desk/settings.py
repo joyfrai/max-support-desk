@@ -30,6 +30,7 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", ["127.0.0.1", "localhost"])
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", [])
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_CROSS_ORIGIN_OPENER_POLICY = os.getenv("DJANGO_CROSS_ORIGIN_OPENER_POLICY", "same-origin") or None
+FORCE_SCRIPT_NAME = os.getenv("DJANGO_FORCE_SCRIPT_NAME") or None
 
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
 MAX_WEBHOOK_SECRET = os.getenv("MAX_WEBHOOK_SECRET", "")
@@ -149,8 +150,8 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_URL = f"{FORCE_SCRIPT_NAME.rstrip('/')}/static/" if FORCE_SCRIPT_NAME else "/static/"
+STATIC_ROOT = Path(os.getenv("DJANGO_STATIC_ROOT", BASE_DIR / "staticfiles"))
 STATICFILES_DIRS = [BASE_DIR / "static"]
 if (BASE_DIR / "frontend" / "dist").exists():
     STATICFILES_DIRS.append(BASE_DIR / "frontend" / "dist")
@@ -193,8 +194,8 @@ UNFOLD = {
     "SITE_HEADER": "MAX Support Desk",
     "SITE_URL": None,
     "THEME": None,
-    "STYLES": ["/static/admin-mobile-overrides.css"],
-    "SCRIPTS": ["/static/admin-theme-default.js"],
+    "STYLES": [f"{STATIC_URL}admin-mobile-overrides.css"],
+    "SCRIPTS": [f"{STATIC_URL}admin-theme-default.js"],
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": True,

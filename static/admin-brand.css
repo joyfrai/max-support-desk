@@ -1,42 +1,10 @@
 :root {
   --max-blue: #0b5cff;
-  --max-blue-dark: #0848ca;
-  --max-blue-soft: #edf4ff;
-  --max-ink: #111418;
-  --max-muted: #626b78;
-  --max-line: #dfe4ea;
-  --max-surface-soft: #f7f9fb;
-}
-
-body {
-  color: var(--max-ink);
-}
-
-#nav-sidebar {
-  background: var(--max-surface-soft);
-  border-color: var(--max-line);
-}
-
-#nav-sidebar-inner {
-  background: var(--max-surface-soft);
-}
-
-#nav-sidebar .text-important,
-#nav-sidebar .text-font-important-light {
-  color: var(--max-ink) !important;
 }
 
 #nav-sidebar a:hover,
 #nav-sidebar button:hover {
   color: var(--max-blue) !important;
-}
-
-#main {
-  background: #fff;
-}
-
-.login #page {
-  background: var(--max-surface-soft) !important;
 }
 
 .max-login-brand {
@@ -53,7 +21,6 @@ body {
 }
 
 .max-login-brand strong {
-  color: var(--max-ink);
   display: block;
   font-size: 20px;
   letter-spacing: -0.02em;
@@ -61,10 +28,10 @@ body {
 }
 
 .max-login-brand span {
-  color: var(--max-muted);
   display: block;
   font-size: 13px;
   margin-top: 3px;
+  opacity: 0.72;
 }
 
 .login #login-form input:focus {
@@ -73,11 +40,10 @@ body {
 }
 
 .login #demo-fill-login {
-  border-color: var(--max-line);
-  color: var(--max-blue-dark);
+  border-color: currentColor;
+  color: var(--max-blue);
 }
 
 .login #demo-fill-login:hover {
-  background: var(--max-blue-soft);
-  border-color: #bfd4ff;
+  border-color: var(--max-blue);
 }

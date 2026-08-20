@@ -15,8 +15,8 @@ class Command(BaseCommand):
     help = "Create local demo users, contacts, conversations, and messages."
 
     def add_arguments(self, parser) -> None:
-        parser.add_argument("--username", default="admin", help="Demo superuser username.")
-        parser.add_argument("--password", default="admin12345", help="Demo superuser password.")
+        parser.add_argument("--username", default="admin", help="Demo user username.")
+        parser.add_argument("--password", required=True, help="Demo user password.")
         parser.add_argument("--reset", action="store_true", help="Reset demo conversations before seeding.")
 
     @transaction.atomic

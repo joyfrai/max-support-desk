@@ -1,143 +1,106 @@
-# MAX Support Desk
+# MAX Help Desk
 
-MVP support desk для сообщений из MAX: Django admin, staff-only Chatscope UI, webhook для входящих сообщений и worker для исходящей очереди.
+Self-hosted help desk для обращений из мессенджера MAX. Команда получает отдельную web-панель, история диалогов хранится на вашем сервере, а ответы уходят клиенту обратно в MAX.
 
-## Что нужно до установки
+[![Демо-доступ](https://img.shields.io/badge/Демо--доступ-yagix.ru%2Fmaxhelpdeskdemo-0b5cff)](https://yagix.ru/maxhelpdeskdemo/)
+[![Лицензия MIT](https://img.shields.io/badge/license-MIT-0b5cff.svg)](LICENSE)
+[![Язык: Python](https://img.shields.io/badge/Python-3.11%2B-111418.svg)](pyproject.toml)
 
-- Домен для support desk, например `support.example.com`.
-- HTTPS-сертификат для домена. Практичный вариант: Let's Encrypt через `certbot`.
-- Сервер с Docker и Docker Compose plugin.
-- MySQL 8 или совместимая БД. Для локальной проверки можно использовать SQLite, но production лучше запускать на MySQL.
-- Токен MAX bot.
-- Секрет webhook для MAX. Он должен совпадать с `MAX_WEBHOOK_SECRET` в `.env`.
+## Зачем этот проект
 
-## Быстрый порядок запуска на сервере
+MAX Help Desk подходит командам, которым нужна собственная панель поддержки без SaaS-зависимости и платы за каждого менеджера:
 
-1. Клонировать репозиторий:
+- данные и код остаются под вашим контролем;
+- менеджеры отвечают из привычной web-панели;
+- входящие сообщения приходят через MAX webhook;
+- исходящие ответы отправляет отдельный worker;
+- realtime-обновления работают через Django Channels и Redis;
+- проект можно развернуть на своём VPS и дорабатывать под свои процессы.
 
-```bash
-git clone https://github.com/joyfrai/max-support-desk.git /opt/max-support-desk
-cd /opt/max-support-desk
+Открытый demo доступен по адресу [yagix.ru/maxhelpdeskdemo](https://yagix.ru/maxhelpdeskdemo/). В демо используются тестовые данные и отдельная SQLite-база; production MAX/Telegram credentials туда не подключены.
+
+## Возможности
+
+- Django Admin и современная staff-only панель чатов на Chatscope.
+- Список контактов MAX, статусы обращений, непрочитанные сообщения и назначение менеджера.
+- Отправка текста и файлов из рабочей панели.
+- Входящий MAX webhook с проверкой секрета и дедупликацией событий.
+- Очередь исходящих сообщений и журнал попыток доставки.
+- WebSocket-обновления без перезагрузки страницы.
+- Audit log действий менеджеров.
+- Защищённая выдача вложений и CSV-экспорт контактов.
+- Read-only external API с OpenAPI-схемой и пагинацией.
+
+## Архитектура
+
+```text
+MAX → webhook → Django + MySQL → Chatscope admin
+                         ├──────→ WebSocket / Redis
+                         └──────→ outbound worker → MAX API
 ```
 
-2. Создать `.env`:
+Основные компоненты:
+
+- `max_support_desk/` — Django settings, URL routes, ASGI/WSGI.
+- `support/` — модели, webhook, staff API, realtime и worker.
+- `frontend/` — React/Vite bundle для чатов внутри Django Admin.
+- `deploy/nginx/` — пример reverse proxy с HTTPS и WebSocket.
+- `docs/` — техническая документация, threat model и исследование решений.
+
+## Быстрый запуск с Docker
+
+Требования: Docker, Docker Compose plugin, MySQL 8 или совместимая база и домен с HTTPS.
 
 ```bash
+git clone https://github.com/joyfrai/max-support-desk.git
+cd max-support-desk
 cp .env.example .env
-nano .env
 ```
 
-Минимально заполнить:
+Заполните `.env` как минимум:
 
-```bash
-DJANGO_SECRET_KEY=replace-with-long-random-secret
+```dotenv
+DJANGO_SECRET_KEY=длинный-случайный-секрет
 DJANGO_DEBUG=false
 DJANGO_ALLOWED_HOSTS=support.example.com
 DJANGO_CSRF_TRUSTED_ORIGINS=https://support.example.com
 
-MYSQL_HOST=your-mysql-host
+MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
 MYSQL_DATABASE=max_support_desk
 MYSQL_USER=max_support_desk
-MYSQL_PASSWORD=replace-with-db-password
+MYSQL_PASSWORD=пароль-базы
 
-MAX_BOT_TOKEN=replace-with-max-bot-token
-MAX_WEBHOOK_SECRET=replace-with-webhook-secret
+MAX_BOT_TOKEN=токен-бота
+MAX_WEBHOOK_SECRET=секрет-webhook
 SUPPORT_DESK_PUBLIC_URL=https://support.example.com
-
-# Optional: notifications about new incoming MAX messages.
-# If token/chat IDs are empty, notifications are skipped.
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_NOTIFICATION_CHAT_ID=
-MAX_NOTIFICATION_CHAT_ID=
-
-AUDIT_LOG_RETENTION_DAYS=7
-SUPPORT_LOG_LEVEL=INFO
 ```
 
-Можно вместо `MYSQL_*` использовать одну строку:
-
-```bash
-DATABASE_URL=mysql://max_support_desk:password@mysql-host:3306/max_support_desk?charset=utf8mb4
-```
-
-3. Собрать и запустить контейнеры:
+Запустите сервисы и примените миграции:
 
 ```bash
 docker compose build
 docker compose up -d redis web worker
-```
-
-Redis поднимается только во внутренней Docker-сети и наружу не публикуется. Он нужен Django Channels для WebSocket-событий между web и worker.
-
-4. Применить миграции:
-
-```bash
 docker compose exec web python manage.py migrate
-```
-
-5. Создать суперпользователя Django:
-
-```bash
 docker compose exec web python manage.py createsuperuser
 ```
 
-6. Открыть admin:
+Готовый пример Nginx находится в [`deploy/nginx/max-support-desk.conf`](deploy/nginx/max-support-desk.conf). После настройки домена панель будет доступна по `/admin/`, а webhook — по `/webhooks/max/`.
 
-```text
-https://support.example.com/admin/
-```
+## Локальный preview на SQLite
 
-Менеджеры должны быть Django users с `is_staff=True`. Раздел чатов доступен внутри admin sidebar: `Поддержка -> Чаты`.
-
-## Уведомления о новых сообщениях
-
-При входящем `message_created` приложение может отправить уведомление в Telegram channel и/или MAX chat/channel. Если настройки пустые, отправка просто пропускается.
-
-Настройки:
+Preview запускается с тестовыми данными и не требует MySQL. Пароль задаётся явно через переменную окружения, чтобы в проекте не было известного default-пароля:
 
 ```bash
-TELEGRAM_BOT_TOKEN=123456:telegram-bot-token
-TELEGRAM_NOTIFICATION_CHAT_ID=-1001234567890
-MAX_NOTIFICATION_CHAT_ID=123456789
-SUPPORT_DESK_PUBLIC_URL=https://support.example.com
+export DEMO_ADMIN_PASSWORD='локальный-пароль-для-preview'
+docker compose -f docker-compose.yml -f docker-compose.sqlite-preview.yml up -d redis web
 ```
 
-В уведомлении будут фамилия/имя пользователя MAX, MAX ID, никнейм, текст сообщения и ссылка на `/admin/support/chats/`.
+Панель будет доступна на `http://127.0.0.1:8066/admin/`.
 
-## Webhook MAX
+## Внешний read-only API
 
-В приложении уже есть отдельный route для webhook:
-
-```text
-POST /webhooks/max/
-```
-
-Публичный URL для настройки в MAX:
-
-```text
-https://support.example.com/webhooks/max/
-```
-
-Секрет webhook передается в HTTP header:
-
-```text
-X-Max-Bot-Api-Secret: <MAX_WEBHOOK_SECRET>
-```
-
-Значение должно совпадать с `MAX_WEBHOOK_SECRET` в `.env`. Если секрет не совпадает, приложение вернет `403`.
-
-## External read-only API
-
-Для внешней интеграции доступен отдельный read-only API поверх тех же диалогов и сообщений.
-
-Что включить в `.env`:
-
-```bash
-SUPPORT_EXTERNAL_API_TOKEN=replace-with-long-random-token
-```
-
-Routes:
+Для интеграций доступны:
 
 ```text
 GET /api/external/conversations/
@@ -145,140 +108,58 @@ GET /api/external/conversations/<conversation_id>/messages/
 GET /api/external/openapi.json
 ```
 
-Auth header:
+API включается только при заданном `SUPPORT_EXTERNAL_API_TOKEN` и принимает:
 
-```text
+```http
 Authorization: Bearer <SUPPORT_EXTERNAL_API_TOKEN>
 ```
 
-Примеры:
+`limit` по умолчанию равен `100`, сортировка по умолчанию — от новых записей к старым, для навигации используется `from`. Полный контракт доступен в OpenAPI endpoint.
+
+## Конфигурация и безопасность
+
+Секреты хранятся только в `.env` или в deployment secret store. Файл `.env` и runtime-данные исключены из Git. Перед публичным релизом репозиторий проверен по текущему состоянию и Git history: production-токенов, ключей, паролей, баз данных и media-файлов в tracked-данных нет.
+
+Для production:
+
+- держите `DJANGO_DEBUG=false`;
+- задайте уникальные `DJANGO_SECRET_KEY`, `MAX_WEBHOOK_SECRET` и `SUPPORT_EXTERNAL_API_TOKEN`;
+- ограничьте `DJANGO_ALLOWED_HOSTS` и `DJANGO_CSRF_TRUSTED_ORIGINS` своим доменом;
+- используйте HTTPS;
+- запускайте Redis и приложение только на loopback/private network;
+- не публикуйте `.env`, SQLite/MySQL dump и каталог `media/`.
+
+Threat model проекта лежит в [`docs/security_threat_model.md`](docs/security_threat_model.md).
+
+## Разработка
+
+Backend:
 
 ```bash
-curl https://support.example.com/api/external/conversations/ \
-  -H "Authorization: Bearer $SUPPORT_EXTERNAL_API_TOKEN"
-
-curl "https://support.example.com/api/external/conversations/?from=0&limit=100&sort=desc" \
-  -H "Authorization: Bearer $SUPPORT_EXTERNAL_API_TOKEN"
-
-curl "https://support.example.com/api/external/conversations/42/messages/?from=0&limit=100&sort=desc" \
-  -H "Authorization: Bearer $SUPPORT_EXTERNAL_API_TOKEN"
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e '.[dev]'
+python manage.py migrate
+pytest -q
+python manage.py check
 ```
 
-Pagination and sorting:
-
-- `limit` по умолчанию `100`
-- `from` по умолчанию `0`
-- `sort=desc` по умолчанию для диалогов и сообщений, то есть сначала самые новые
-- при необходимости можно запросить `sort=asc`
-- `offset` пока тоже принимается как backward-compatible alias для `from`
-
-`/api/external/openapi.json` отдает OpenAPI schema для этих endpoint'ов. Ее можно импортировать в Postman, Swagger UI или любой другой клиент, который понимает OpenAPI.
-
-## Nginx
-
-Готовый пример лежит в [deploy/nginx/max-support-desk.conf](deploy/nginx/max-support-desk.conf).
-
-Установить конфиг:
+Frontend:
 
 ```bash
-sudo cp deploy/nginx/max-support-desk.conf /etc/nginx/sites-available/max-support-desk.conf
-sudo ln -s /etc/nginx/sites-available/max-support-desk.conf /etc/nginx/sites-enabled/max-support-desk.conf
-sudo nginx -t
-sudo systemctl reload nginx
+cd frontend
+npm ci
+npm run build
 ```
 
-Перед применением заменить `support.example.com` на реальный домен и проверить пути к сертификату:
+Перед pull request проверьте `git diff --check`, backend tests и frontend build.
 
-```text
-/etc/letsencrypt/live/<domain>/fullchain.pem
-/etc/letsencrypt/live/<domain>/privkey.pem
-```
+## Участие в проекте
 
-Nginx проксирует admin, static, Chatscope UI, webhook MAX и WebSocket route `/ws/` на Docker web port `127.0.0.1:8066`.
+Исправления и предложения принимаются через GitHub Issues и Pull Requests. Перед большим изменением сначала опишите задачу, затронутые части системы и способ проверки. Детали — в [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Локальная preview-сборка на SQLite
+## Лицензия и связь
 
-Для быстрой проверки без внешней БД:
+Проект распространяется по открытой лицензии [MIT](LICENSE).
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.sqlite-preview.yml up -d redis web
-```
-
-Preview запускает SQLite volume и demo data. Web будет доступен на:
-
-```text
-http://127.0.0.1:8066/admin/
-```
-
-## Проверка после обновлений
-
-Обновить уже развернутый production:
-
-```bash
-cd /var/www/fastuser/data/www/max-support-desk
-
-git status --short
-git pull --ff-only
-
-docker compose build web worker
-docker compose up -d web worker
-```
-
-Если менялись зависимости, frontend или Django settings, rebuild обязателен. Для обычных backend/frontend правок достаточно пересобрать и пересоздать `web` и `worker`; Redis volume трогать не нужно.
-
-Применить миграции и проверить Django:
-
-```bash
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py check
-docker compose exec web python manage.py makemigrations --check --dry-run
-```
-
-Проверить контейнеры и логи:
-
-```bash
-docker compose ps
-docker compose logs --tail=100 web worker
-docker compose logs --tail=50 redis
-```
-
-Проверить локальные порты внутри сервера:
-
-```bash
-ss -ltnp | grep -E ':8066|:6379|:3306|:80|:443'
-docker compose port redis 6379
-```
-
-Ожидаемо:
-
-- `web` слушает `127.0.0.1:8066`;
-- `redis` доступен только на `127.0.0.1:6379`;
-- `mysql` доступен на `127.0.0.1:3306` или на указанном внешнем MySQL host;
-- наружу открыты только nginx `80/443` для домена.
-
-Проверить HTTP/HTTPS endpoints:
-
-```bash
-curl -I http://127.0.0.1:8066/admin/login/
-curl -I http://127.0.0.1:8066/support/
-curl -I http://127.0.0.1:8066/webhooks/max/
-
-curl -I https://maxdesk.dept.trading/admin/login/
-curl -I https://maxdesk.dept.trading/admin/support/chats/
-```
-
-Ожидаемо:
-
-- `/admin/login/` возвращает `200`;
-- `/support/` может вернуть `302` на `/admin/support/chats/`;
-- GET `/webhooks/max/` возвращает `405`, потому что webhook принимает только `POST`.
-
-Для ручной проверки:
-
-- `/admin/` открывает Django admin.
-- `/admin/support/maxcontact/` показывает пользователей MAX только для просмотра.
-- `/admin/support/chats/` открывает Chatscope UI внутри Django admin.
-- `POST /webhooks/max/` принимает webhook только с правильным `X-Max-Bot-Api-Secret`.
-- Новое входящее сообщение MAX появляется в открытом `/admin/support/chats/` без перезагрузки страницы.
-- Входящий файл MAX отображается как вложение; если MAX payload содержит download URL, менеджер может скачать файл по ссылке из чата.
-- Исходящий файл из чата получает статус отправки и доходит в MAX; при ошибке остается доступна кнопка `Повторить`.
+По вопросам установки и доработок: [написать в Telegram](https://t.me/egorprh).

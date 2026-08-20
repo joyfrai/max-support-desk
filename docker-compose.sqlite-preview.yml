@@ -8,16 +8,18 @@ services:
       DJANGO_CROSS_ORIGIN_OPENER_POLICY: ""
       MAX_BOT_TOKEN: local-preview
       MAX_WEBHOOK_SECRET: local-preview
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:?Set DEMO_ADMIN_PASSWORD before starting the preview}
       REDIS_URL: redis://127.0.0.1:6379/0
     volumes:
       - sqlite_data:/app/data
       - media:/app/media
-    command: >
-      sh -c "
-      python manage.py migrate --noinput &&
-      python manage.py seed_demo_data --username admin --password admin12345 &&
-      daphne -b 127.0.0.1 -p 8066 max_support_desk.asgi:application
-      "
+    command:
+      - sh
+      - -c
+      - >
+        python manage.py migrate --noinput &&
+        python manage.py seed_demo_data --username admin --password "$$DEMO_ADMIN_PASSWORD" &&
+        daphne -b 127.0.0.1 -p 8066 max_support_desk.asgi:application
 
   worker:
     profiles:

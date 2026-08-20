@@ -12,6 +12,14 @@
 {% endblock %}
 
 {% block content %}
+    <div class="max-login-brand" aria-label="MAX Help Desk">
+        <img src="{% static 'max-help-desk-mark.svg' %}" alt="">
+        <div>
+            <strong>MAX Help Desk</strong>
+            <span>Панель поддержки</span>
+        </div>
+    </div>
+
     {% include "unfold/helpers/unauthenticated_title.html" with title=site_title|default:'Панель поддержки' subtitle='Вход для сотрудников' %}
 
     {% include "unfold/helpers/messages.html" %}

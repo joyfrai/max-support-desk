@@ -197,11 +197,30 @@ def channel_layers_from_env(redis_url: str | None = None) -> dict[str, dict[str,
 CHANNEL_LAYERS = channel_layers_from_env()
 
 UNFOLD = {
-    "SITE_TITLE": "MAX Support Desk",
-    "SITE_HEADER": "MAX Support Desk",
+    "SITE_TITLE": "MAX Help Desk",
+    "SITE_HEADER": "MAX Help Desk",
+    "SITE_ICON": f"{STATIC_URL}max-help-desk-mark.svg",
     "SITE_URL": None,
     "THEME": None,
-    "STYLES": [f"{STATIC_URL}admin-mobile-overrides.css"],
+    "COLORS": {
+        "primary": {
+            "50": "#edf4ff",
+            "100": "#dbe8ff",
+            "200": "#bfd4ff",
+            "300": "#94b5ff",
+            "400": "#5f8fff",
+            "500": "#2f6fff",
+            "600": "#0b5cff",
+            "700": "#0848ca",
+            "800": "#06389e",
+            "900": "#052d7c",
+            "950": "#031d52",
+        },
+    },
+    "STYLES": [
+        f"{STATIC_URL}admin-mobile-overrides.css",
+        f"{STATIC_URL}admin-brand.css",
+    ],
     "SCRIPTS": [f"{STATIC_URL}admin-theme-default.js"],
     "SIDEBAR": {
         "show_search": True,

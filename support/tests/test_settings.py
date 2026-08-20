@@ -19,7 +19,10 @@ def test_channel_layer_uses_redis_when_redis_url_is_set() -> None:
 def test_unfold_uses_theme_switch_with_light_default_script_and_hides_site_link() -> None:
     assert project_settings.UNFOLD["THEME"] is None
     assert "/static/admin-mobile-overrides.css" in project_settings.UNFOLD["STYLES"]
+    assert "/static/admin-brand.css" in project_settings.UNFOLD["STYLES"]
     assert "/static/admin-theme-default.js" in project_settings.UNFOLD["SCRIPTS"]
+    assert project_settings.UNFOLD["SITE_ICON"].endswith("/static/max-help-desk-mark.svg")
+    assert project_settings.UNFOLD["COLORS"]["primary"]["600"] == "#0b5cff"
     assert project_settings.UNFOLD["SITE_URL"] is None
 
 
